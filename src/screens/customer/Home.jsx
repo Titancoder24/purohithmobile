@@ -6,6 +6,7 @@ import { colors, radii, spacing, font } from "../../lib/theme";
 import api, { API_URL } from "../../lib/api";
 import { spiritualTap } from "../../lib/spiritualSounds";
 import { fetchMarketplacePoojas } from "../../lib/marketplace";
+import { usePreferences } from "../../lib/preferences";
 
 const LOCAL_POOJAS = [
   { id: "local-gauri-ganesha", slug: "gauri-ganesha-vratha", name: "Gauri and Ganesha Vratha", category: "Festival", duration_hours: 2, base_price: 1800, localImage: require("../../../assets/images/gauri-ganesha-vratha.png") },
@@ -24,6 +25,8 @@ const categories = ["All", "Home", "Festival", "Shanti", "Family"];
 export default function Home({ navigation }) {
   const { width } = useWindowDimensions();
   const desktop = width >= 900;
+  const columns = desktop ? 3 : width >= 360 ? 2 : 1;
+  const { area } = usePreferences();
   const [poojas, setPoojas] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
@@ -65,17 +68,18 @@ export default function Home({ navigation }) {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <FlatList
         data={filtered}
-        key={desktop ? "desktop-grid" : "mobile-grid"}
-        numColumns={desktop ? 3 : 1}
-        columnWrapperStyle={desktop ? styles.gridRow : undefined}
+        key={`${columns}-column-grid`}
+        numColumns={columns}
+        columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
         keyExtractor={(p) => p.id || p.slug}
         contentContainerStyle={[styles.content, desktop && styles.contentDesktop]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.saffron} />}
         ListHeaderComponent={<>
-          <View style={styles.topbar}>
+          <View style={[styles.topbar, desktop && styles.topbarDesktop]}>
             <View>
-              <Text style={styles.eyebrow}>PUROHITH CONNECT</Text>
+              <Text style={styles.eyebrow}>SERVING {area.name.toUpperCase()}</Text>
               <Text style={styles.heading}>A ceremony, handled well.</Text>
+              <Text style={styles.headingSub}>Discover verified Purohits or invite proposals with one clear request.</Text>
             </View>
             <Pressable accessibilityLabel="Filters" style={({ pressed }) => [styles.iconButton, pressed && styles.controlPressed]}><SlidersHorizontal size={20} color={colors.ink} /></Pressable>
           </View>
@@ -102,7 +106,7 @@ export default function Home({ navigation }) {
         </>}
         renderItem={({ item }) => {
           const imageSource = item.localImage || (item.image_url ? { uri: item.image_url.startsWith("http") ? item.image_url : `${API_URL}${item.image_url}` } : require("../../../assets/images/ritual-kalasha.webp"));
-          return <Pressable testID={`pooja-card-${item.slug}`} style={({ pressed }) => [styles.card, desktop && styles.cardDesktop, pressed && styles.cardPressed]} onPress={() => openPooja(item)}>
+          return <Pressable testID={`pooja-card-${item.slug}`} style={({ pressed }) => [styles.card, columns > 1 && styles.cardGrid, desktop && styles.cardDesktop, pressed && styles.cardPressed]} onPress={() => openPooja(item)}>
             <View style={[styles.imageFrame, desktop && styles.imageFrameDesktop]}><Image source={imageSource} style={styles.image} resizeMode="cover" /></View>
             <View style={styles.cardBody}>
               <View style={styles.cardHeading}><Text numberOfLines={2} style={styles.name}>{item.name}</Text></View>
@@ -142,12 +146,14 @@ const styles = StyleSheet.create({
   content: { width: "100%", maxWidth: 1180, alignSelf: "center", paddingHorizontal: spacing.lg, paddingBottom: 44 },
   contentDesktop: { paddingHorizontal: 32 },
   topbar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 20, marginBottom: 16 },
+  topbarDesktop: { paddingTop: 32, marginBottom: 20 },
   eyebrow: { fontSize: 10, fontWeight: "700", color: colors.saffron, letterSpacing: .5 },
-  heading: { fontSize: 29, lineHeight: 35, fontFamily: font.semibold, color: colors.ink, marginTop: 4 },
+  heading: { maxWidth: "98%", fontSize: 27, lineHeight: 34, fontFamily: font.semibold, color: colors.ink, marginTop: 4 },
+  headingSub: { maxWidth: 470, color: colors.muted2, fontSize: 11, lineHeight: 17, marginTop: 6 },
   iconButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.warmBorder, borderRadius: 22, backgroundColor: colors.white },
   controlPressed: { transform: [{ translateY: 2 }, { scale: .97 }], opacity: .86 },
   panelPressed: { transform: [{ translateY: 3 }, { scale: .988 }], opacity: .92, shadowOpacity: .04 },
-  hero: { width: "100%", aspectRatio: 1.95, maxHeight: 260, minHeight: 178, overflow: "hidden", backgroundColor: colors.ink, borderRadius: radii.xl, marginTop: 16 },
+  hero: { width: "100%", aspectRatio: 1.95, maxHeight: 260, minHeight: 178, overflow: "hidden", backgroundColor: colors.brandBrown, borderRadius: radii.xl, marginTop: 16 },
   heroDesktop: { aspectRatio: 3.9, minHeight: 230, maxHeight: 280 },
   heroArtwork: { width: "100%", height: "100%", justifyContent: "center" },
   heroArtworkImage: { resizeMode: "cover", borderRadius: radii.xl },
@@ -171,7 +177,7 @@ const styles = StyleSheet.create({
   aiTitle: { color: colors.ink, fontSize: 15, fontWeight: "700", marginTop: 2 },
   aiBody: { color: colors.muted2, fontSize: 11, marginTop: 3 },
   requestPanel: { marginTop: 10, minHeight: 72, padding: 13, borderRadius: radii.lg, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.warmBorder, borderBottomWidth: 3, borderBottomColor: "#D8D5CF", flexDirection: "row", alignItems: "center", gap: 11, shadowColor: "#000", shadowOpacity: .06, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
-  requestBadge: { alignSelf: "center", backgroundColor: colors.ink, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 12 },
+  requestBadge: { alignSelf: "center", backgroundColor: colors.brandBrown, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 12 },
   requestBadgeText: { color: colors.white, fontSize: 8, fontWeight: "700", letterSpacing: .5 },
   requestTitle: { color: colors.ink, fontSize: 14, fontWeight: "700", lineHeight: 18 },
   requestBody: { color: colors.muted2, fontSize: 10, lineHeight: 14, marginTop: 3 },
@@ -185,30 +191,31 @@ const styles = StyleSheet.create({
   sectionMeta: { fontSize: 11, color: colors.muted2 },
   filters: { gap: 8, paddingVertical: 12 },
   filter: { height: 36, paddingHorizontal: 15, borderRadius: 18, borderWidth: 1, borderColor: colors.warmBorder, alignItems: "center", justifyContent: "center", backgroundColor: colors.white },
-  filterActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  filterActive: { backgroundColor: colors.brandBrown, borderColor: colors.brandBrown },
   filterText: { color: colors.ink, fontSize: 12, fontWeight: "600" },
   filterTextActive: { color: colors.white },
   serviceLinks: { marginTop: 16, borderTopWidth: 1, borderColor: colors.warmBorder },
   serviceLink: { minHeight: 78, flexDirection: "row", alignItems: "center", gap: 12, borderBottomWidth: 1, borderColor: colors.warmBorder, paddingVertical: 12 },
-  gridRow: { gap: 14 },
+  gridRow: { gap: 14, alignItems: "flex-start" },
   card: { width: "100%", overflow: "hidden", backgroundColor: colors.white, marginBottom: 24 },
+  cardGrid: { flex: 1, width: "auto", maxWidth: "49%" },
   cardDesktop: { maxWidth: "32.5%" },
   cardPressed: { opacity: .9, transform: [{ translateY: 2 }, { scale: .985 }] },
-  imageFrame: { width: "100%", aspectRatio: 1.5, maxHeight: 260, overflow: "hidden", borderRadius: radii.lg, backgroundColor: colors.muted },
+  imageFrame: { width: "100%", aspectRatio: 1.25, maxHeight: 150, overflow: "hidden", borderRadius: radii.md, backgroundColor: colors.muted },
   imageFrameDesktop: { aspectRatio: 1.42, maxHeight: 210 },
   image: { width: "100%", height: "100%" },
   cardBody: { paddingTop: 11, paddingHorizontal: 2 },
   cardHeading: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
-  name: { flex: 1, fontSize: 16, lineHeight: 21, color: colors.ink, fontWeight: "700" },
+  name: { flex: 1, fontSize: 14, lineHeight: 19, color: colors.ink, fontWeight: "700" },
   cardMeta: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 5 },
   metaText: { fontSize: 11, color: colors.muted2 },
   priceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
   price: { color: colors.ink, fontWeight: "700", fontSize: 12 },
-  cardActions: { flexDirection: "row", gap: 8, marginTop: 12 },
+  cardActions: { flexDirection: "row", gap: 6, marginTop: 11 },
   cardAction: { flex: 1, height: 38, borderRadius: 19, borderWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.white },
-  cardActionDark: { backgroundColor: colors.ink, borderColor: colors.ink, borderBottomWidth: 3, borderBottomColor: "#000" },
-  cardActionText: { color: colors.ink, fontSize: 11, fontWeight: "700" },
-  cardActionDarkText: { color: colors.white, fontSize: 11, fontWeight: "700" },
+  cardActionDark: { backgroundColor: colors.brandBrown, borderColor: colors.brandBrown, borderBottomWidth: 3, borderBottomColor: colors.brandBrownDark },
+  cardActionText: { color: colors.ink, fontSize: 10, fontWeight: "700" },
+  cardActionDarkText: { color: colors.white, fontSize: 10, fontWeight: "700" },
   trustRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, paddingVertical: 18, borderTopWidth: 1, borderColor: colors.warmBorder },
   trustText: { flex: 1, fontSize: 11, color: colors.muted2 },
   empty: { paddingVertical: 40 },

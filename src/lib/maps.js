@@ -12,10 +12,11 @@ export function isValidCoordinate(latitude, longitude) {
 }
 
 export function normalizeLocation(location = {}) {
-  const latitude = Number(location.latitude ?? location.lat);
-  const longitude = Number(location.longitude ?? location.lng);
+  const source = location || {};
+  const latitude = Number(source.latitude ?? source.lat);
+  const longitude = Number(source.longitude ?? source.lng);
   return {
-    ...location,
+    ...source,
     latitude,
     longitude,
     lat: latitude,

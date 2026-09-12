@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, StyleSheet, FlatList, RefreshControl, Modal, Pressable, TextInput, ScrollView, Alert, Linking, Image } from "react-native";
+import { View, Text, StyleSheet, FlatList, RefreshControl, Modal, Pressable, TextInput, ScrollView, Alert, Image } from "react-native";
 import { CalendarDays, ChevronRight, LocateFixed, MapPin, MessageSquareText, Phone } from "lucide-react-native";
 import { colors, radii, spacing, font } from "../../lib/theme";
 import { Button, Field } from "../../components/UI";
 import { EmptyState, StatusBadge } from "../../components/ProductUI";
-import api, { API, tokens } from "../../lib/api";
+import api from "../../lib/api";
+import { downloadInvoice, listBookings, listPaymentReports } from "../../lib/payments";
 import { useI18n } from "../../lib/i18n";
 import { useAuth } from "../../lib/auth";
 
@@ -45,7 +46,11 @@ export default function MyBookings({ navigation }) {
 
   const load = useCallback(async () => {
     if (user?.demo) return setItems([DEMO_CUSTOMER_BOOKING]);
-    try { const { data } = await api.get("/bookings/customer"); setItems(data); } catch (_) { setItems([]); }
+    try {
+      const [{ bookings }, { reports }] = await Promise.all([listBookings(), listPaymentReports()]);
+      const reportsByBooking = Object.fromEntries((reports || []).map((report) => [report.booking_id, report]));
+      setItems((bookings || []).map((booking) => ({ ...booking, payment_report: reportsByBooking[booking.id] })));
+    } catch (_) { setItems([]); }
   }, [user?.demo]);
   useEffect(() => { load(); }, [load]);
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
@@ -86,9 +91,10 @@ export default function MyBookings({ navigation }) {
     } catch (e) { Alert.alert("Failed", e?.response?.data?.detail || "Failed"); }
   };
   const openInvoice = async (b) => {
-    const tok = await tokens.getAccess();
-    if (!tok) return Alert.alert("Please sign in");
-    Linking.openURL(`${API}/bookings/${b.id}/invoice?auth=${encodeURIComponent(tok)}`);
+    const report = b.payment_report;
+    if (!report?.invoice_html) return Alert.alert("Invoice pending", "The invoice will appear after Cashfree confirms the payment.");
+    try { await downloadInvoice(report.invoice_html, report.invoice_number); }
+    catch (error) { Alert.alert("Invoice unavailable", error?.message || "Please try again."); }
   };
 
   return (
@@ -190,7 +196,7 @@ export default function MyBookings({ navigation }) {
               const isSel = newDate === iso;
               return (
                 <Pressable key={iso} onPress={() => setNewDate(iso)}
-                  style={[styles.dayChip, isSel && { backgroundColor: colors.ink, borderColor: colors.ink }]}> 
+                  style={[styles.dayChip, isSel && { backgroundColor: colors.brandBrown, borderColor: colors.brandBrown }]}>
                   <Text style={{ fontSize: font.sizes.xs, color: isSel ? colors.white : colors.muted2 }}>{d.toLocaleDateString("en-IN", { weekday: "short" })}</Text>
                   <Text style={{ fontSize: font.sizes.lg, fontWeight: "700", color: isSel ? colors.white : colors.ink }}>{d.getDate()}</Text>
                 </Pressable>
@@ -202,7 +208,7 @@ export default function MyBookings({ navigation }) {
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {TIME_SLOTS.map(s => (
               <Pressable key={s} onPress={() => setNewTime(s)}
-                style={[styles.timeChip, newTime === s && { backgroundColor: colors.ink, borderColor: colors.ink }]}> 
+                style={[styles.timeChip, newTime === s && { backgroundColor: colors.brandBrown, borderColor: colors.brandBrown }]}>
                 <Text style={{ color: newTime === s ? colors.white : colors.ink, fontWeight: "600" }}>{s}</Text>
               </Pressable>
             ))}
@@ -296,7 +302,7 @@ const styles = StyleSheet.create({
   priceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 15 },
   price: { color: colors.ink, fontWeight: "700", fontSize: 17 },
   primaryActions: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16 },
-  trackAction: { flex: 1, minHeight: 46, borderRadius: 23, backgroundColor: colors.ink, paddingHorizontal: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  trackAction: { flex: 1, minHeight: 46, borderRadius: 23, backgroundColor: colors.brandBrown, paddingHorizontal: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   trackActionText: { color: colors.white, fontWeight: "700", fontSize: 12 },
   roundAction: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 13, borderTopWidth: 1, borderColor: colors.warmBorder, paddingTop: 13 },

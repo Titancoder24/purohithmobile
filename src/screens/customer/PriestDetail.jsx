@@ -7,12 +7,6 @@ import { useI18n } from "../../lib/i18n";
 import api, { API_URL } from "../../lib/api";
 import { fetchMarketplaceProfile } from "../../lib/marketplace";
 
-const DEMO_PRIESTS = {
-  "demo-ramachandra": { id: "demo-ramachandra", name: "Sri Ramachandra Sharma", experience: 32, rating: 4.9, reviews_count: 187, verified: true, bio: "Smartha Vedic purohit serving families across Bengaluru and South India.", languages: ["Kannada", "Sanskrit", "Tamil"], pooja_specialties: ["Vivaha", "Ayushya Homa", "Rudrabhishek"], areas: ["Bengaluru", "South India"], localImage: require("../../../assets/images/purohit-ramachandra.webp") },
-  "demo-ramesh": { id: "demo-ramesh", name: "Pandit Ramesh Shukla", experience: 28, rating: 4.9, reviews_count: 214, verified: true, bio: "Kashi Vedic pandit specialising in home ceremonies and family traditions.", languages: ["Hindi", "Sanskrit", "English"], pooja_specialties: ["Griha Pravesh", "Satyanarayan", "Vastu"], areas: ["Delhi NCR", "North India"], localImage: require("../../../assets/images/purohit-ramesh.webp") },
-  "demo-suresh": { id: "demo-suresh", name: "Acharya Suresh Trivedi", experience: 36, rating: 5, reviews_count: 129, verified: true, bio: "Vaidika acharya conducting traditional ceremonies across Mumbai and Pune.", languages: ["Marathi", "Hindi", "Sanskrit"], pooja_specialties: ["Lakshmi Puja", "Navagraha", "Havan"], areas: ["Mumbai", "Pune"], localImage: require("../../../assets/images/purohit-suresh.webp") },
-};
-
 export default function PriestDetail({ route, navigation }) {
   const { priestId, poojaSlug } = route.params || {};
   const { t, language } = useI18n();
@@ -22,8 +16,10 @@ export default function PriestDetail({ route, navigation }) {
   const desktop = width >= 860;
 
   useEffect(() => {
-    if (DEMO_PRIESTS[priestId]) setPriest(DEMO_PRIESTS[priestId]);
-    else fetchMarketplaceProfile(priestId).then((data) => setPriest(data.profile)).catch(() => api.get(`/priests/${priestId}`).then(({ data }) => setPriest(data)).catch(() => {}));
+    fetchMarketplaceProfile(priestId).then((data) => {
+      setPriest(data.profile);
+      setReviews(data.profile?.reviews || []);
+    }).catch(() => api.get(`/priests/${priestId}`).then(({ data }) => setPriest(data)).catch(() => {}));
     api.get(`/priests/${priestId}/reviews`).then(({ data }) => setReviews(data)).catch(() => {});
   }, [priestId]);
 
@@ -36,9 +32,8 @@ export default function PriestDetail({ route, navigation }) {
   const serviceAreas = priest.areas || priest.service_areas || [];
   const starting = priest.starting_price_inr || 100;
   const maxPrice = priest.max_price_inr || 80000;
-  const portrait = priest.localImage
-    || (priest.photo_url ? { uri: priest.photo_url.startsWith("http") ? priest.photo_url : `${API_URL}${priest.photo_url}` } : null)
-    || require("../../../assets/images/purohit-ramachandra.webp");
+  const portrait = priest.photo_url ? { uri: priest.photo_url.startsWith("http") ? priest.photo_url : `${API_URL}${priest.photo_url}` } : require("../../../assets/images/purohithconnect-logo.png");
+  const portfolio = (priest.portfolio || priest.portfolio_urls || []).map((item) => typeof item === "string" ? { uri: item.startsWith("http") ? item : `${API_URL}${item}` } : item);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.white }}>
@@ -60,6 +55,11 @@ export default function PriestDetail({ route, navigation }) {
           <Text style={styles.section}>{language === "kn" ? "ಪುರೋಹಿತರ ಬಗ್ಗೆ" : "About"}</Text>
           <Text style={styles.body}>{priest.bio || "—"}</Text>
         </View>
+
+        {portfolio.length ? <View style={styles.portfolioBlock}>
+          <View style={styles.portfolioHead}><View><Text style={styles.section}>Ceremony portfolio</Text><Text style={styles.portfolioSub}>Verified work shared by this Purohit</Text></View><Text style={styles.portfolioCount}>{portfolio.length} photos</Text></View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.portfolioRail}>{portfolio.map((source, index) => <Image key={index} source={source} style={[styles.portfolioImage, desktop && styles.portfolioImageDesktop]} resizeMode="cover" />)}</ScrollView>
+        </View> : null}
 
         <View style={styles.sectionBlock}>
           <View style={styles.detailTitle}><Languages size={16} color={colors.ink} /><Text style={styles.section}>{language === "kn" ? "ಭಾಷೆಗಳು" : "Languages"}</Text></View>
@@ -141,6 +141,7 @@ const styles = StyleSheet.create({
   statRail: { flexDirection: "row", borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.warmBorder, maxWidth: 820, width: "100%", alignSelf: "center" },
   profileStat: { flex: 1, minHeight: 82, alignItems: "center", justifyContent: "center", borderRightWidth: 1, borderColor: colors.warmBorder }, profileStatValue: { color: colors.ink, fontSize: 18, fontWeight: "700" }, profileStatLabel: { color: colors.muted2, fontSize: 10, marginTop: 4 },
   sectionBlock: { padding: 20, borderBottomWidth: 1, borderColor: colors.warmBorder },
+  portfolioBlock: { paddingVertical: 20, borderBottomWidth: 1, borderColor: colors.warmBorder }, portfolioHead: { paddingHorizontal: 20, flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }, portfolioSub: { color: colors.muted2, fontSize: 10, marginTop: 3 }, portfolioCount: { color: colors.brandOrangeDark, fontSize: 10, fontWeight: "800" }, portfolioRail: { gap: 10, paddingHorizontal: 20, paddingTop: 13 }, portfolioImage: { width: 236, height: 178, borderRadius: 10, backgroundColor: colors.muted }, portfolioImageDesktop: { width: 310, height: 220 },
   detailTitle: { flexDirection: "row", alignItems: "center", gap: 7 },
   section: { fontSize: font.sizes.sm, fontWeight: "700", color: colors.ink, marginBottom: 6 },
   body: { fontSize: font.sizes.sm, color: colors.muted2, lineHeight: 20 },

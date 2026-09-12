@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
+import { closestServiceArea, detectLocationFromIp, detectPreciseLocation } from "./location";
 
 const KEY = "pc.preferences";
 export const BENGALURU_AREAS = [
@@ -22,6 +23,9 @@ export function PreferencesProvider({ children }) {
   const [language, setLanguageState] = useState("en");
   const [area, setAreaState] = useState(BENGALURU_AREAS[0]);
   const [areas, setAreas] = useState(BENGALURU_AREAS);
+  const [detectedLocation, setDetectedLocation] = useState(null);
+  const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
+  const [locating, setLocating] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -30,6 +34,8 @@ export function PreferencesProvider({ children }) {
         const saved = JSON.parse(raw);
         if (saved.language) setLanguageState(saved.language);
         if (saved.areaId) setAreaState(BENGALURU_AREAS.find((item) => item.id === saved.areaId) || BENGALURU_AREAS[0]);
+        if (saved.detectedLocation) setDetectedLocation(saved.detectedLocation);
+        if (typeof saved.notificationsEnabled === "boolean") setNotificationsEnabledState(saved.notificationsEnabled);
       }
     }).finally(() => setReady(true));
   }, []);
@@ -47,13 +53,42 @@ export function PreferencesProvider({ children }) {
 
   const setLanguage = useCallback(async (next) => {
     setLanguageState(next);
-    await AsyncStorage.setItem(KEY, JSON.stringify({ language: next, areaId: area.id }));
-  }, [area.id]);
+    await AsyncStorage.mergeItem(KEY, JSON.stringify({ language: next }));
+    const { data } = await supabase?.auth.getUser() || {};
+    if (data?.user?.id) await supabase.from("app_users").update({ preferred_language: next }).eq("id", data.user.id);
+  }, []);
   const setArea = useCallback(async (next) => {
     setAreaState(next);
-    await AsyncStorage.setItem(KEY, JSON.stringify({ language, areaId: next.id }));
-  }, [language]);
-  const value = useMemo(() => ({ language, setLanguage, area, setArea, areas, ready }), [language, setLanguage, area, setArea, areas, ready]);
+    await AsyncStorage.mergeItem(KEY, JSON.stringify({ areaId: next.id }));
+    const { data } = await supabase?.auth.getUser() || {};
+    if (data?.user?.id) await supabase.from("priest_profiles").update({ primary_service_area: next.name }).eq("user_id", data.user.id);
+  }, []);
+  const setNotificationsEnabled = useCallback(async (next) => {
+    setNotificationsEnabledState(next);
+    await AsyncStorage.mergeItem(KEY, JSON.stringify({ notificationsEnabled: next }));
+  }, []);
+  const locate = useCallback(async (source = "ip") => {
+    setLocating(true);
+    try {
+      const location = source === "gps" ? await detectPreciseLocation() : await detectLocationFromIp();
+      const nearest = closestServiceArea(location, areas);
+      setDetectedLocation(location);
+      if (nearest) setAreaState(nearest);
+      await AsyncStorage.mergeItem(KEY, JSON.stringify({ detectedLocation: location, areaId: nearest?.id || area.id }));
+      return { location, area: nearest };
+    } finally {
+      setLocating(false);
+    }
+  }, [area.id, areas]);
+  useEffect(() => {
+    if (!ready || detectedLocation) return;
+    locate("ip").catch(() => {});
+  }, [detectedLocation, locate, ready]);
+  const value = useMemo(() => ({
+    language, setLanguage, area, setArea, areas, ready,
+    detectedLocation, locating, locate,
+    notificationsEnabled, setNotificationsEnabled,
+  }), [area, areas, detectedLocation, language, locate, locating, notificationsEnabled, ready, setArea, setLanguage, setNotificationsEnabled]);
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;
 }
 

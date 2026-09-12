@@ -1,5 +1,10 @@
 // Purohith Connect — theme tokens (mirrors /app/frontend/tailwind/CSS vars).
 export const colors = {
+  brandBrown: "#8F1028",
+  brandBrownDark: "#68101F",
+  brandOrange: "#F06412",
+  brandOrangeDark: "#C94708",
+  brandTint: "#FFF4EC",
   saffron: "#E65319",
   saffronDark: "#B93B0D",
   marigold: "#F5A524",
@@ -46,7 +51,7 @@ export const shadow = {
     elevation: 2,
   },
   saffron: {
-    shadowColor: "#000000",
+    shadowColor: "#8F1028",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.10,
     shadowRadius: 10,

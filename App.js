@@ -38,6 +38,7 @@ import ShareLocation from "./src/screens/priest/ShareLocation";
 import Conversation from "./src/screens/Conversation";
 import CallRoom from "./src/screens/CallRoom";
 import Inbox from "./src/screens/Inbox";
+import Settings from "./src/screens/Settings";
 import { startMobileSession, trackMobileEvent } from "./src/lib/supabase";
 
 const RootStack = createNativeStackNavigator();
@@ -67,7 +68,7 @@ class WidgetBoundary extends Component {
 
 const navTheme = {
   ...DefaultTheme,
-  colors: { ...DefaultTheme.colors, background: colors.cotton, primary: colors.saffron, card: colors.white, text: colors.ink, border: colors.warmBorder },
+  colors: { ...DefaultTheme.colors, background: colors.cotton, primary: colors.brandOrange, card: colors.white, text: colors.ink, border: colors.warmBorder },
 };
 
 // Deep-link config: purohith://booking/<id>, purohith://priests
@@ -79,8 +80,15 @@ const linking = {
         screens: {
           Home: "home",
           Bookings: "bookings",
+          Dashboard: "Dashboard",
+          Marketplace: "Marketplace",
+          Messages: "Messages",
+          Chat: "Chat",
+          Availability: "Availability",
+          Profile: "Profile",
         },
       },
+      PriestList: "priests",
       PriestDetail: "priests/:priestId",
       Booking: "book/:priestId",
       RequestPooja: "request-pooja",
@@ -103,7 +111,7 @@ function TabIcon({ focused, Icon }) {
     ]).start();
   }, [focused, scale]);
   return <Animated.View style={[styles.tabIcon, { transform: [{ scale }] }]}> 
-    <Icon size={24} color={focused ? colors.saffron : "#70706C"} strokeWidth={focused ? 2.7 : 2.1} />
+    <Icon size={24} color={focused ? colors.brandOrangeDark : "#70706C"} strokeWidth={focused ? 2.7 : 2.1} />
     <View style={[styles.tabDot, focused && styles.tabDotActive]} />
   </Animated.View>;
 }
@@ -173,14 +181,14 @@ const styles = {
   tabBarIconSlot: { width: 42, height: 30, alignItems: "center", justifyContent: "center", marginTop: 0, marginBottom: 1 },
   tabIcon: { width: 38, height: 30, alignItems: "center", justifyContent: "center", gap: 2 },
   tabDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: "transparent" },
-  tabDotActive: { backgroundColor: colors.saffron },
+  tabDotActive: { backgroundColor: colors.brandOrange },
   tabLabel: { fontSize: 10, lineHeight: 12, fontWeight: "600", letterSpacing: 0 },
   splashOverlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, zIndex: 999, elevation: 999, alignItems: "center", justifyContent: "center", backgroundColor: colors.white, paddingHorizontal: 26 },
   splashCard: { width: "100%", maxWidth: 360, alignItems: "center", justifyContent: "center" },
   splashTitle: { marginTop: 10, color: colors.ink, fontSize: 22, lineHeight: 28, fontWeight: "800", textAlign: "center", letterSpacing: 0 },
   splashSub: { marginTop: 6, color: colors.muted2, fontSize: 12, lineHeight: 17, fontWeight: "600", textAlign: "center" },
   splashLine: { width: 164, height: 4, overflow: "hidden", borderRadius: 8, marginTop: 22, backgroundColor: "#F0EAE3" },
-  splashLineFill: { flex: 1, borderRadius: 8, backgroundColor: colors.saffron },
+  splashLineFill: { flex: 1, borderRadius: 8, backgroundColor: colors.brandOrange },
 };
 
 function Router() {
@@ -235,15 +243,20 @@ function Router() {
             <RootStack.Screen name="TrackPriest" component={TrackPriest} options={{ headerShown: true, title: "Live arrival" }} />
             <RootStack.Screen name="Conversation" component={Conversation} options={{ headerShown: false }} />
             <RootStack.Screen name="CallRoom" component={CallRoom} options={{ headerShown: false }} />
+            <RootStack.Screen name="Settings" component={Settings} options={{ headerShown: true, title: "Settings" }} />
           </>
         )}
-        {user && user.role === "priest" && (
+        {user && user.role === "priest" && user.onboardingRequired && (
+          <RootStack.Screen name="PriestOnboarding" component={PriestOnboarding} />
+        )}
+        {user && user.role === "priest" && !user.onboardingRequired && (
           <>
             <RootStack.Screen name="Tabs" component={PriestTabs} />
             <RootStack.Screen name="PriestOnboarding" component={PriestOnboarding} options={{ headerShown: true, title: "Profile" }} />
             <RootStack.Screen name="ShareLocation" component={ShareLocation} options={{ headerShown: true, title: "Share location" }} />
             <RootStack.Screen name="Conversation" component={Conversation} options={{ headerShown: false }} />
             <RootStack.Screen name="CallRoom" component={CallRoom} options={{ headerShown: false }} />
+            <RootStack.Screen name="Settings" component={Settings} options={{ headerShown: true, title: "Settings" }} />
           </>
         )}
       </RootStack.Navigator>

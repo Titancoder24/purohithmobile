@@ -163,7 +163,7 @@ export default function DAPWidget({ navigationRef }) {
 
 const styles = StyleSheet.create({
   fabWrap: { position: "absolute", right: 18, bottom: Platform.OS === "ios" ? 98 : 86, zIndex: 50 },
-  fab: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.ink, alignItems: "center", justifyContent: "center", ...shadow.saffron },
+  fab: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.brandBrown, alignItems: "center", justifyContent: "center", ...shadow.saffron },
   fabSpark: { position: "absolute", right: -2, top: -2, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.warmBorder },
   backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(20,17,14,0.22)" },
   dismissArea: { flex: 1 },
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   iconButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" },
   messages: { padding: spacing.lg, maxHeight: 360 },
   bubble: { maxWidth: "88%", paddingHorizontal: 13, paddingVertical: 11, borderRadius: 18 },
-  userBubble: { alignSelf: "flex-end", backgroundColor: colors.ink, borderBottomRightRadius: 5 },
+  userBubble: { alignSelf: "flex-end", backgroundColor: colors.brandBrown, borderBottomRightRadius: 5 },
   assistantBubble: { alignSelf: "flex-start", backgroundColor: colors.muted, borderBottomLeftRadius: 5 },
   messageText: { color: colors.ink, fontSize: font.sizes.sm, lineHeight: 19 },
   action: { marginTop: 10, minHeight: 34, borderRadius: radii.pill, backgroundColor: colors.saffron, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 12 },
@@ -185,5 +185,5 @@ const styles = StyleSheet.create({
   quickText: { color: colors.muted2, fontSize: font.sizes.xs, fontWeight: "700" },
   inputRow: { flexDirection: "row", gap: 8, padding: spacing.lg, borderTopWidth: 1, borderColor: colors.warmBorder },
   input: { flex: 1, height: 44, borderRadius: radii.pill, backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.warmBorder, paddingHorizontal: spacing.md, color: colors.ink, fontSize: font.sizes.sm },
-  send: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.ink, alignItems: "center", justifyContent: "center" },
+  send: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brandBrown, alignItems: "center", justifyContent: "center" },
 });

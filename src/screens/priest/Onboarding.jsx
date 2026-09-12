@@ -1,209 +1,208 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TextInput, Alert, Image, Pressable } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { UserRound } from "lucide-react-native";
-import { colors, radii, spacing, font } from "../../lib/theme";
-import { Button, Card, Field } from "../../components/UI";
-import api, { API_URL, tokens } from "../../lib/api";
+import * as FileSystem from "expo-file-system";
+import { decode } from "base64-arraybuffer";
+import { BadgeIndianRupee, BriefcaseBusiness, Camera, Check, FileBadge2, Phone, UserRound } from "lucide-react-native";
+import { colors, font, radii } from "../../lib/theme";
+import { Button, Field } from "../../components/UI";
+import { useAuth } from "../../lib/auth";
+import { supabase } from "../../lib/supabase";
+import BANGALORE_AREAS from "../../data/bangalore-areas.json";
 
-const LANGUAGES = ["Kannada", "Sanskrit", "English", "Hindi", "Tamil", "Telugu", "Marathi", "Malayalam"];
-const AREAS = ["Jayanagar", "Malleshwaram", "Basavanagudi", "Whitefield", "Indiranagar",
-  "Koramangala", "HSR", "Yelahanka", "Rajajinagar", "Banashankari"];
-const POOJAS = ["ganesh", "griha-pravesh", "satyanarayan", "navagraha", "rudrabhishek"];
+const LANGUAGES = ["English", "Kannada", "Sanskrit", "Hindi", "Tamil", "Telugu", "Marathi", "Malayalam"];
+const AREAS = BANGALORE_AREAS.map((area) => area.name);
+const POOJAS = [
+  ["gauri-ganesha-vratha", "Gauri and Ganesha Vrata"],
+  ["rudrabhishek", "Rudra Abhishek"],
+  ["satyanarayan", "Satyanarayana Puja"],
+  ["griha-pravesh", "Griha Pravesh Puja"],
+  ["ayudha-puja", "Ayudha Puja"],
+  ["navagraha-shanti", "Navagraha Shanti"],
+  ["varamahalakshmi-vratha", "Varamahalakshmi Vrata"],
+  ["namakarna", "Namakarana"],
+  ["vivaha", "Vivaha"],
+];
 
-export default function PriestOnboarding({ navigation }) {
+const digits = (value, length = 7) => value.replace(/[^0-9]/g, "").slice(0, length);
+
+export default function PriestOnboarding() {
+  const { user, completeOnboarding } = useAuth();
+  const desktop = useWindowDimensions().width >= 760;
   const [profile, setProfile] = useState(null);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(user?.name || "");
+  const [phone, setPhone] = useState(user?.phone || "");
   const [bio, setBio] = useState("");
   const [experience, setExperience] = useState("");
-  const [langs, setLangs] = useState(new Set(["Kannada", "Sanskrit"]));
+  const [hourlyRate, setHourlyRate] = useState("");
+  const [startingPrice, setStartingPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [langs, setLangs] = useState(new Set(["English"]));
   const [areas, setAreas] = useState(new Set());
   const [poojas, setPoojas] = useState(new Set());
-  const [photoUri, setPhotoUri] = useState(null);
   const [photoUrl, setPhotoUrl] = useState("");
-  const [idDocUrl, setIdDocUrl] = useState("");
+  const [idDocPath, setIdDocPath] = useState("");
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState("");
+
+  const completion = useMemo(() => {
+    const checks = [name, phone.length >= 10, bio, experience, hourlyRate, langs.size, areas.size, poojas.size, photoUrl, idDocPath];
+    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  }, [areas.size, bio, experience, hourlyRate, idDocPath, langs.size, name, phone.length, photoUrl, poojas.size]);
 
   useEffect(() => {
-    api.get("/priest/me").then(({ data }) => {
-      setProfile(data);
-      if (data) {
-        setName(data.name || "");
-        setBio(data.bio || "");
-        setExperience(String(data.experience_years || ""));
-        setLangs(new Set(data.languages || ["Kannada"]));
-        setAreas(new Set(data.service_areas || []));
-        setPoojas(new Set(data.poojas_offered || []));
-        setPhotoUrl(data.photo_url || "");
-      }
-    }).catch(() => {});
-  }, []);
-
-  const toggle = (set, val, setter) => {
-    setter((prev) => {
-      const n = new Set(prev); n.has(val) ? n.delete(val) : n.add(val);
-      return n;
-    });
-  };
-
-  const pickImage = async (setter, kind = "photo") => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return Alert.alert("Permission denied", "Enable photo access in Settings.");
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true, aspect: kind === "photo" ? [1, 1] : [4, 3], quality: 0.7,
-    });
-    if (result.canceled) return;
-    const asset = result.assets[0];
-    setPhotoUri(asset.uri);
-    // Upload to /api/storage/upload (multipart)
-    const form = new FormData();
-    form.append("file", { uri: asset.uri, name: `upload.jpg`, type: "image/jpeg" });
-    form.append("purpose", kind === "photo" ? "priest_photo" : "priest_kyc");
-    try {
-      const tok = await tokens.getAccess();
-      const resp = await fetch(`${API_URL}/api/storage/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${tok}` },
-        body: form,
-      });
-      const json = await resp.json();
-      if (!resp.ok) throw new Error(json?.detail || "Upload failed");
-      const url = json.url || json.download_url || `/api/files/${json.file_id}`;
-      setter(url);
-    } catch (e) {
-      Alert.alert("Upload failed", String(e.message || e));
+    let active = true;
+    async function load() {
+      if (!supabase || !user?.id || user.demo) return setLoading(false);
+      const [profileResult, userResult] = await Promise.all([
+        supabase.from("priest_profiles").select("*").eq("user_id", user.id).maybeSingle(),
+        supabase.from("app_users").select("full_name,phone").eq("id", user.id).maybeSingle(),
+      ]);
+      if (!active) return;
+      if (profileResult.error) Alert.alert("Profile unavailable", profileResult.error.message);
+      const data = profileResult.data;
+      setProfile(data || null);
+      setName(data?.display_name || userResult.data?.full_name || user.name || "");
+      setPhone(userResult.data?.phone || user.phone || "");
+      setBio(data?.bio || "");
+      setExperience(data?.years_experience == null ? "" : String(data.years_experience));
+      setHourlyRate(data?.hourly_rate_inr ? String(data.hourly_rate_inr) : "");
+      setStartingPrice(data?.starting_price_inr ? String(data.starting_price_inr) : "");
+      setMaxPrice(data?.max_price_inr ? String(data.max_price_inr) : "");
+      setLangs(new Set(data?.languages?.length ? data.languages : ["English"]));
+      setAreas(new Set(data?.service_areas || []));
+      setPoojas(new Set(data?.pooja_slugs || []));
+      setPhotoUrl(data?.photo_url || "");
+      setIdDocPath(data?.id_document_url || "");
+      setLoading(false);
     }
+    load();
+    return () => { active = false; };
+  }, [user]);
+
+  const toggle = (value, setter) => setter((current) => {
+    const next = new Set(current);
+    next.has(value) ? next.delete(value) : next.add(value);
+    return next;
+  });
+
+  const uploadAsset = async (kind) => {
+    if (!supabase || !user?.id || user.demo) return Alert.alert("Demo account", "Create a priest account to upload verification documents.");
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return Alert.alert("Photo access needed", "Allow photo access to upload your profile image and ID proof.");
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: kind === "photo" ? [1, 1] : [4, 3], quality: 0.78 });
+    if (result.canceled) return;
+    setUploading(kind);
+    try {
+      const asset = result.assets[0];
+      const mime = asset.mimeType || "image/jpeg";
+      const extension = mime.split("/")[1]?.replace("jpeg", "jpg") || "jpg";
+      const path = `${user.id}/${kind}-${Date.now()}.${extension}`;
+      let body;
+      if (Platform.OS === "web") body = await (await fetch(asset.uri)).arrayBuffer();
+      else body = decode(await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 }));
+      const bucket = kind === "photo" ? "priest-portfolio" : "priest-kyc";
+      const { error } = await supabase.storage.from(bucket).upload(path, body, { contentType: mime, upsert: true });
+      if (error) throw error;
+      if (kind === "photo") setPhotoUrl(supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl);
+      else setIdDocPath(path);
+    } catch (error) {
+      Alert.alert("Upload failed", error?.message || "Please try another image.");
+    } finally { setUploading(""); }
   };
 
   const save = async () => {
-    if (!name.trim() || !bio.trim() || !experience || langs.size === 0) {
-      return Alert.alert("Missing", "Name, bio, experience and at least one language are required.");
-    }
+    const experienceValue = Number(experience);
+    const hourlyValue = Number(hourlyRate);
+    const startingValue = Number(startingPrice || hourlyRate);
+    const maxValue = Number(maxPrice || startingValue);
+    if (name.trim().length < 2) return Alert.alert("Name required", "Enter your full display name.");
+    if (phone.length < 10) return Alert.alert("Phone required", "Enter a valid 10-digit phone number.");
+    if (bio.trim().length < 30) return Alert.alert("Tell families more", "Add at least 30 characters about your practice and experience.");
+    if (!Number.isFinite(experienceValue) || experienceValue < 0) return Alert.alert("Experience required", "Enter your years of experience.");
+    if (!Number.isFinite(hourlyValue) || hourlyValue <= 0) return Alert.alert("Hourly charge required", "Enter your standard hourly charge.");
+    if (langs.size === 0 || areas.size === 0 || poojas.size === 0) return Alert.alert("Practice details required", "Choose at least one language, service area, and puja specialty.");
+    if (maxValue < startingValue) return Alert.alert("Check your pricing", "Maximum ceremony fee cannot be lower than the starting fee.");
     setSaving(true);
     try {
-      await api.post("/priest/onboarding", {
-        name,
-        bio,
-        experience_years: Number(experience) || 0,
+      if (user.demo) return Alert.alert("Demo profile complete", "Create a real priest account to submit this profile for verification.");
+      if (!supabase) throw new Error("Supabase is not configured.");
+      const now = new Date().toISOString();
+      const { error: userError } = await supabase.from("app_users").update({ full_name: name.trim(), phone, updated_at: now }).eq("id", user.id);
+      if (userError) throw userError;
+      const { error: profileError } = await supabase.from("priest_profiles").upsert({
+        user_id: user.id,
+        display_name: name.trim(),
+        bio: bio.trim(),
+        years_experience: experienceValue,
+        hourly_rate_inr: hourlyValue,
+        starting_price_inr: startingValue,
+        max_price_inr: maxValue,
         languages: Array.from(langs),
-        poojas_offered: Array.from(poojas),
         service_areas: Array.from(areas),
-        photo_url: photoUrl,
-        id_proof_url: idDocUrl,
-      });
-      Alert.alert("Saved", "Profile submitted. Admin will verify shortly.");
-      navigation.goBack();
-    } catch (e) {
-      Alert.alert("Failed", e?.response?.data?.detail || "Try again");
+        primary_service_area: Array.from(areas)[0],
+        pooja_slugs: Array.from(poojas),
+        photo_url: photoUrl || null,
+        id_document_url: idDocPath || null,
+        onboarding_step: 3,
+        submitted_at: now,
+        updated_at: now,
+      }, { onConflict: "user_id" });
+      if (profileError) throw profileError;
+      await completeOnboarding();
+      Alert.alert("Profile submitted", "Your profile is saved and has been sent for verification.");
+    } catch (error) {
+      console.error(`Priest onboarding save failed: ${error?.message || String(error)}`);
+      Alert.alert("Could not save profile", error?.message || "Please try again.");
     } finally { setSaving(false); }
   };
 
-  return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <Text style={styles.kicker}>PUBLIC LISTING</Text>
-      <Text style={styles.h1}>Build your priest profile</Text>
-      <Text style={styles.sub}>{profile?.verification_status === "verified" ? "Verified and visible to customers" : "Complete the essentials, then submit for verification."}</Text>
-      <View style={styles.progress}><ProgressItem value="01" label="Identity" done /><View style={styles.progressLine} /><ProgressItem value="02" label="Practice" done={Boolean(name && bio)} /><View style={styles.progressLine} /><ProgressItem value="03" label="Verify" done={Boolean(idDocUrl)} /></View>
+  return <ScrollView style={styles.root} contentContainerStyle={[styles.content, desktop && styles.contentDesktop]} showsVerticalScrollIndicator={false}>
+    <View style={styles.header}><View style={styles.headerCopy}><Text style={styles.kicker}>PRIEST ONBOARDING</Text><Text style={styles.h1}>{profile ? "Update your professional profile" : "Create your professional profile"}</Text><Text style={styles.sub}>Families use these details to discover, compare, and book your services.</Text></View><View style={styles.completion}><Text style={styles.completionValue}>{completion}%</Text><Text style={styles.completionLabel}>complete</Text></View></View>
+    <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${completion}%` }]} /></View>
 
-      {/* Photo */}
-      <Card style={styles.uploadCard}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.lg }}>
-          {photoUrl ? (
-            <Image source={{ uri: photoUri || (photoUrl.startsWith("http") ? photoUrl : `${API_URL}${photoUrl}`) }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <UserRound size={28} color={colors.ink} />
-            </View>
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontWeight: "700", color: colors.ink }}>Photo</Text>
-            <Text style={styles.hint}>Face clearly visible, no filter</Text>
-            <Pressable testID="pick-photo" onPress={() => pickImage(setPhotoUrl, "photo")} style={styles.smallBtn}>
-              <Text style={styles.smallBtnTxt}>{photoUrl ? "Change" : "Upload"}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Card>
+    <Section icon={UserRound} title="Identity" subtitle="Your public name and verified contact details">
+      <View style={styles.photoRow}>{photoUrl ? <Image source={{ uri: photoUrl }} style={styles.avatar} /> : <View style={styles.avatarPlaceholder}><UserRound size={30} color={colors.brandBrown} /></View>}<View style={styles.photoCopy}><Text style={styles.itemTitle}>Professional photo</Text><Text style={styles.hint}>Use a clear, recent portrait without filters.</Text><Button title={uploading === "photo" ? "Uploading..." : photoUrl ? "Change photo" : "Upload photo"} onPress={() => uploadAsset("photo")} disabled={Boolean(uploading)} variant="outline" style={styles.inlineButton} icon={Camera} /></View></View>
+      <View style={[styles.formGrid, desktop && styles.formGridDesktop]}><Field label="Full name"><Input testID="priest-name-input" icon={UserRound} value={name} onChangeText={setName} placeholder="Your full name" /></Field><Field label="Phone number"><Input testID="priest-phone-input" icon={Phone} keyboardType={Platform.OS === "web" ? "default" : "phone-pad"} value={phone} onChangeText={(value) => setPhone(digits(value, 10))} placeholder="10-digit mobile number" /></Field></View>
+      <Field label="About your practice"><TextInput testID="bio-input" multiline value={bio} onChangeText={setBio} placeholder="Describe your Vedic training, traditions, and the families you serve." placeholderTextColor="#8A8582" style={[styles.input, styles.textArea]} /></Field>
+    </Section>
 
-      <Field label="Display name">
-        <TextInput testID="priest-name-input" value={name} onChangeText={setName} placeholder="Your full name" style={styles.input} />
-      </Field>
-      <Field label="About you">
-        <TextInput testID="bio-input" multiline value={bio} onChangeText={setBio}
-          placeholder="Traditional Vedic priest with 15 years of experience..."
-          style={[styles.input, { minHeight: 90 }]} />
-      </Field>
-      <Field label="Experience (years)">
-        <TextInput testID="experience-input" keyboardType="number-pad" value={experience} onChangeText={setExperience}
-          placeholder="e.g. 12" style={styles.input} />
-      </Field>
+    <Section icon={BriefcaseBusiness} title="Experience and services" subtitle="Help families understand your background and specialties">
+      <View style={[styles.formGrid, desktop && styles.formGridDesktop]}><Field label="Years of experience"><Input testID="experience-input" icon={BriefcaseBusiness} keyboardType="number-pad" value={experience} onChangeText={(value) => setExperience(digits(value, 2))} placeholder="e.g. 12" /></Field><Field label="Standard hourly charge"><Input testID="hourly-rate-input" icon={BadgeIndianRupee} keyboardType="number-pad" value={hourlyRate} onChangeText={(value) => setHourlyRate(digits(value))} placeholder="e.g. 1200" /></Field><Field label="Starting ceremony fee"><Input testID="starting-price-input" icon={BadgeIndianRupee} keyboardType="number-pad" value={startingPrice} onChangeText={(value) => setStartingPrice(digits(value))} placeholder="e.g. 2500" /></Field><Field label="Maximum ceremony fee"><Input testID="max-price-input" icon={BadgeIndianRupee} keyboardType="number-pad" value={maxPrice} onChangeText={(value) => setMaxPrice(digits(value))} placeholder="e.g. 25000" /></Field></View>
+      <ChoiceGroup title="Languages" values={LANGUAGES.map((item) => [item, item])} selected={langs} onToggle={(value) => toggle(value, setLangs)} prefix="lang" />
+      <ChoiceGroup title="Puja specialties" values={POOJAS} selected={poojas} onToggle={(value) => toggle(value, setPoojas)} prefix="pooja" />
+      <ChoiceGroup title="Service areas" values={AREAS.map((item) => [item, item])} selected={areas} onToggle={(value) => toggle(value, setAreas)} prefix="area" />
+    </Section>
 
-      <Text style={styles.sectionTitle}>Languages</Text>
-      <View style={styles.chipRow}>
-        {LANGUAGES.map(l => (
-          <Chip key={l} label={l} active={langs.has(l)} onPress={() => toggle(langs, l, setLangs)} testID={`lang-${l}`} />
-        ))}
-      </View>
+    <Section icon={FileBadge2} title="Verification" subtitle="Your document is private and visible only to the verification team">
+      <View style={styles.documentRow}><View style={[styles.documentIcon, idDocPath && styles.documentIconDone]}>{idDocPath ? <Check size={22} color={colors.white} /> : <FileBadge2 size={22} color={colors.brandBrown} />}</View><View style={styles.documentCopy}><Text style={styles.itemTitle}>{idDocPath ? "Identity document uploaded" : "Upload Aadhaar or PAN"}</Text><Text style={styles.hint}>JPG or PNG up to 5 MB.</Text></View><Button title={uploading === "id" ? "Uploading..." : idDocPath ? "Replace" : "Upload"} onPress={() => uploadAsset("id")} disabled={Boolean(uploading)} variant="outline" /></View>
+    </Section>
 
-      <Text style={styles.sectionTitle}>Pooja specialties</Text>
-      <View style={styles.chipRow}>
-        {POOJAS.map(p => (
-          <Chip key={p} label={p} active={poojas.has(p)} onPress={() => toggle(poojas, p, setPoojas)} testID={`pooja-${p}`} />
-        ))}
-      </View>
-
-      <Text style={styles.sectionTitle}>Service areas</Text>
-      <View style={styles.chipRow}>
-        {AREAS.map(a => (
-          <Chip key={a} label={a} active={areas.has(a)} onPress={() => toggle(areas, a, setAreas)} testID={`area-${a}`} />
-        ))}
-      </View>
-
-      <Text style={styles.sectionTitle}>ID Proof</Text>
-      <Card style={styles.documentCard}>
-        {idDocUrl ? <Text style={{ color: colors.success, fontWeight: "700" }}>✓ Uploaded</Text> : <Text style={styles.hint}>Aadhaar / PAN — for admin verification</Text>}
-        <Pressable testID="pick-id" onPress={() => pickImage(setIdDocUrl, "id")} style={[styles.smallBtn, { alignSelf: "flex-start", marginTop: 8 }]}>
-          <Text style={styles.smallBtnTxt}>{idDocUrl ? "Replace" : "Upload"}</Text>
-        </Pressable>
-      </Card>
-
-      <Button testID="save-profile-btn" title={saving ? "Saving…" : "Submit for verification"} onPress={save} disabled={saving} style={{ marginTop: spacing.xl }} />
-    </ScrollView>
-  );
+    <View style={styles.submitBar}><View style={styles.submitCopy}><Text style={styles.submitTitle}>Ready for review?</Text><Text style={styles.hint}>You can update your details later from Profile.</Text></View><Button testID="save-profile-btn" title={saving || loading ? "Saving..." : "Submit for verification"} onPress={save} disabled={saving || loading} /></View>
+  </ScrollView>;
 }
 
-function Chip({ label, active, onPress, testID }) {
-  return (
-    <Pressable testID={testID} onPress={onPress} style={[styles.chip, active && styles.chipActive]}>
-      <Text style={[styles.chipTxt, active && { color: colors.white }]}>{label}</Text>
-    </Pressable>
-  );
+function Input({ icon: Icon, ...props }) {
+  return <View style={styles.inputShell}>{Icon ? <Icon size={18} color={colors.brandBrown} /> : null}<TextInput placeholderTextColor="#8A8582" style={styles.inputBare} {...props} /></View>;
 }
 
-function ProgressItem({ value, label, done }) { return <View style={styles.progressItem}><View style={[styles.progressDot, done && styles.progressDotDone]}><Text style={[styles.progressNumber, done && { color: colors.white }]}>{value}</Text></View><Text style={styles.progressLabel}>{label}</Text></View>; }
+function Section({ icon: Icon, title, subtitle, children }) {
+  return <View style={styles.section}><View style={styles.sectionHeader}><View style={styles.sectionIcon}><Icon size={20} color={colors.brandBrown} /></View><View style={{ flex: 1 }}><Text style={styles.sectionTitle}>{title}</Text><Text style={styles.sectionSubtitle}>{subtitle}</Text></View></View>{children}</View>;
+}
+
+function ChoiceGroup({ title, values, selected, onToggle, prefix }) {
+  return <View style={styles.choiceGroup}><Text style={styles.choiceTitle}>{title}</Text><View style={styles.chipRow}>{values.map(([value, label]) => <Pressable key={value} testID={`${prefix}-${value}`} onPress={() => onToggle(value)} style={({ pressed }) => [styles.chip, selected.has(value) && styles.chipActive, pressed && styles.pressed]}><Text style={[styles.chipText, selected.has(value) && styles.chipTextActive]}>{label}</Text>{selected.has(value) ? <Check size={14} color={colors.white} /> : null}</Pressable>)}</View></View>;
+}
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.white }, content: { width: "100%", maxWidth: 760, alignSelf: "center", padding: spacing.lg, paddingBottom: 52 },
-  kicker: { color: colors.saffron, fontSize: 10, fontWeight: "700", letterSpacing: .8, marginTop: 8 },
-  h1: { fontSize: 31, lineHeight: 38, fontWeight: "700", color: colors.ink, marginTop: 6 },
-  sub: { color: colors.muted2, fontSize: font.sizes.sm, marginTop: 4 },
-  progress: { flexDirection: "row", alignItems: "flex-start", justifyContent: "center", marginTop: 26, marginBottom: 8 }, progressItem: { width: 62, alignItems: "center" }, progressDot: { width: 31, height: 31, borderRadius: 16, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }, progressDotDone: { backgroundColor: colors.ink }, progressNumber: { color: colors.muted2, fontSize: 9, fontWeight: "700" }, progressLabel: { color: colors.muted2, fontSize: 9, marginTop: 5 }, progressLine: { width: 48, height: 1, backgroundColor: colors.warmBorder, marginTop: 15 },
-  sectionTitle: { fontSize: font.sizes.sm, fontWeight: "700", color: colors.ink, marginTop: 28, marginBottom: 10, paddingTop: 20, borderTopWidth: 1, borderColor: colors.warmBorder },
-  input: {
-    minHeight: 54, borderRadius: radii.md, backgroundColor: colors.muted,
-    borderWidth: 0, paddingHorizontal: spacing.lg, paddingVertical: 10,
-    fontSize: font.sizes.base, color: colors.ink,
-  },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radii.pill, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.warmBorder },
-  chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
-  chipTxt: { fontSize: font.sizes.xs, color: colors.ink, fontWeight: "600" },
-  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.muted },
-  avatarPlaceholder: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" },
-  uploadCard: { marginTop: spacing.lg, borderRadius: radii.lg, padding: spacing.lg, shadowOpacity: 0, elevation: 0, borderWidth: 0, backgroundColor: colors.muted },
-  documentCard: { borderRadius: radii.lg, padding: spacing.lg, shadowOpacity: 0, elevation: 0, borderWidth: 0, backgroundColor: colors.muted },
-  hint: { fontSize: font.sizes.xs, color: colors.muted2, marginTop: 2 },
-  smallBtn: { alignSelf: "flex-start", marginTop: 8, paddingHorizontal: 15, paddingVertical: 8, borderRadius: radii.pill, backgroundColor: colors.ink },
-  smallBtnTxt: { color: colors.white, fontWeight: "700", fontSize: font.sizes.xs },
+  root: { flex: 1, backgroundColor: colors.white }, content: { width: "100%", maxWidth: 980, alignSelf: "center", padding: 20, paddingBottom: 64 }, contentDesktop: { paddingHorizontal: 42, paddingTop: 32 },
+  header: { flexDirection: "row", alignItems: "flex-start", gap: 18 }, headerCopy: { flex: 1, minWidth: 0 }, kicker: { color: colors.brandOrangeDark, fontFamily: font.bold, fontSize: 10, letterSpacing: .8 }, h1: { color: colors.ink, fontFamily: font.bold, fontSize: 30, lineHeight: 37, marginTop: 7 }, sub: { color: colors.muted2, fontSize: 13, lineHeight: 19, marginTop: 6, maxWidth: 560 },
+  completion: { width: 76, height: 76, borderRadius: 38, alignItems: "center", justifyContent: "center", backgroundColor: colors.brandTint, borderWidth: 1, borderColor: "#F3C9B0" }, completionValue: { color: colors.brandBrown, fontFamily: font.bold, fontSize: 18 }, completionLabel: { color: colors.muted2, fontSize: 9, marginTop: 2 }, progressTrack: { height: 4, borderRadius: 2, overflow: "hidden", backgroundColor: "#F0E5E2", marginTop: 22 }, progressFill: { height: 4, borderRadius: 2, backgroundColor: colors.brandOrange },
+  section: { marginTop: 28, paddingTop: 24, borderTopWidth: 1, borderColor: colors.warmBorder }, sectionHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 20 }, sectionIcon: { width: 42, height: 42, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.brandTint }, sectionTitle: { color: colors.ink, fontFamily: font.bold, fontSize: 18 }, sectionSubtitle: { color: colors.muted2, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  photoRow: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 20 }, avatar: { width: 88, height: 88, borderRadius: 44, backgroundColor: colors.muted }, avatarPlaceholder: { width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center", backgroundColor: colors.brandTint }, photoCopy: { flex: 1, minWidth: 0 }, itemTitle: { color: colors.ink, fontFamily: font.semibold, fontSize: 14 }, hint: { color: colors.muted2, fontSize: 10, lineHeight: 15, marginTop: 3 }, inlineButton: { alignSelf: "flex-start", marginTop: 10 },
+  formGrid: { gap: 0 }, formGridDesktop: {}, inputShell: { minHeight: 54, flex: 1, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, borderRadius: radii.md, backgroundColor: colors.muted, borderWidth: 1, borderColor: "transparent" }, inputBare: { flex: 1, minHeight: 52, color: colors.ink, fontSize: 14, paddingVertical: 0 }, input: { minHeight: 54, borderRadius: radii.md, backgroundColor: colors.muted, paddingHorizontal: 14, paddingVertical: 12, color: colors.ink, fontSize: 14, borderWidth: 1, borderColor: "transparent" }, textArea: { minHeight: 112, textAlignVertical: "top" },
+  choiceGroup: { marginTop: 18 }, choiceTitle: { color: colors.ink, fontFamily: font.semibold, fontSize: 13, marginBottom: 9 }, chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, chip: { minHeight: 40, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 13, borderRadius: 20, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.warmBorder }, chipActive: { backgroundColor: colors.brandBrown, borderColor: colors.brandBrown }, chipText: { color: colors.ink, fontFamily: font.semibold, fontSize: 11 }, chipTextActive: { color: colors.white }, pressed: { opacity: .72 },
+  documentRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 15, borderRadius: radii.md, backgroundColor: colors.muted }, documentIcon: { width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.brandTint }, documentIconDone: { backgroundColor: colors.success }, documentCopy: { flex: 1, minWidth: 0 },
+  submitBar: { marginTop: 30, paddingTop: 22, borderTopWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16 }, submitCopy: { flex: 1, minWidth: 0 }, submitTitle: { color: colors.ink, fontFamily: font.bold, fontSize: 15 },
 });

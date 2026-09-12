@@ -6,7 +6,7 @@ import { colors, radii, spacing } from "../../lib/theme";
 import { Button } from "../../components/UI";
 import OpenStreetMap from "../../components/OpenStreetMap";
 import MapplsDrawer from "../../components/MapplsDrawer";
-import api from "../../lib/api";
+import { pushBookingLocation, setTrackingConsent } from "../../lib/payments";
 
 export default function ShareLocation({ route, navigation }) {
   const { booking } = route.params || {};
@@ -21,22 +21,22 @@ export default function ShareLocation({ route, navigation }) {
     const permission = await Location.requestForegroundPermissionsAsync();
     if (permission.status !== "granted") return Alert.alert("Location permission required", "Allow location access while travelling to the booking.");
     try {
-      const { data } = await api.post(`/bookings/${booking.id}/tracking-consent`, { enabled: true });
+      const data = await setTrackingConsent(booking.id, true);
       if (data.tracking_status !== "active") setMessage("Consent saved. Waiting for the customer to enable tracking.");
       watcher.current = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 20 }, async (next) => {
         setPosition(next.coords);
         try {
-          await api.post(`/bookings/${booking.id}/location`, { latitude: next.coords.latitude, longitude: next.coords.longitude, accuracy_meters: next.coords.accuracy, heading_degrees: next.coords.heading });
+          await pushBookingLocation(booking.id, { latitude: next.coords.latitude, longitude: next.coords.longitude, accuracy_meters: next.coords.accuracy, heading_degrees: next.coords.heading });
           setActive(true); setMessage("Live location is being shared for this booking.");
         } catch (error) {
-          if (error?.response?.status === 409) setMessage("Waiting for the customer to enable tracking.");
+          if (/both participants|tracking/i.test(error?.message || "")) setMessage("Waiting for the customer to enable tracking.");
         }
       });
-    } catch (error) { Alert.alert("Unable to start", error?.response?.data?.detail || "Please try again."); }
+    } catch (error) { Alert.alert("Unable to start", error?.message || "Please try again."); }
   };
   const stop = async () => {
     watcher.current?.remove(); watcher.current = null; setActive(false);
-    try { await api.post(`/bookings/${booking.id}/tracking-consent`, { enabled: false }); } catch (_) { /* Best effort. */ }
+    try { await setTrackingConsent(booking.id, false); } catch (_) { /* Best effort. */ }
     navigation.goBack();
   };
   const latitude = position?.latitude || 12.9716;

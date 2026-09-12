@@ -20,7 +20,14 @@
         "NSFaceIDUsageDescription": "Use Face ID to unlock your Purohith Connect session.",
         "NSPhotoLibraryUsageDescription": "Attach ID / certificate photos to your priest profile.",
         "NSCameraUsageDescription": "Take a photo of your ID / certificate for priest verification.",
-        "NSLocationWhenInUseUsageDescription": "Use your location to match nearby purohits and, with explicit consent, show live arrival progress for an active booking."
+        "NSLocationWhenInUseUsageDescription": "Use your location to match nearby purohits and, with explicit consent, show live arrival progress for an active booking.",
+        "LSApplicationQueriesSchemes": [
+          "upi",
+          "tez",
+          "phonepe",
+          "paytmmp",
+          "bhim"
+        ]
       }
     },
     "android": {

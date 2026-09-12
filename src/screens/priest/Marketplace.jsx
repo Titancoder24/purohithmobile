@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   checkBox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1, borderColor: colors.warmBorder, alignItems: "center", justifyContent: "center" },
   checkBoxActive: { backgroundColor: colors.saffron, borderColor: colors.saffron },
   checkText: { color: colors.ink, fontSize: 12, fontWeight: "600" },
-  send: { height: 50, marginTop: 13, backgroundColor: colors.ink, borderRadius: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderBottomWidth: 3, borderBottomColor: "#000000", shadowColor: "#000", shadowOpacity: .14, shadowRadius: 7, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  send: { height: 50, marginTop: 13, backgroundColor: colors.brandBrown, borderRadius: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderBottomWidth: 3, borderBottomColor: colors.brandBrownDark, shadowColor: "#000", shadowOpacity: .14, shadowRadius: 7, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
   sendPressed: { transform: [{ translateY: 2 }, { scale: .99 }], borderBottomWidth: 1, shadowOpacity: .05 },
   sendText: { color: colors.white, fontSize: 13, fontWeight: "700" },
   empty: { marginTop: 24, padding: 26, borderRadius: 14, backgroundColor: colors.muted, alignItems: "center" },

@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, FlatList, Pressable, Image, ScrollView, TextInp
 import { MapPin, Languages, ShieldCheck, ArrowRight, SlidersHorizontal, BadgeCheck, Search, Check, X } from "lucide-react-native";
 import { colors, font } from "../../lib/theme";
 import api, { API_URL } from "../../lib/api";
-import { usePreferences } from "../../lib/preferences";
 import { fetchMarketplacePriests } from "../../lib/marketplace";
 import BrandLogo from "../../components/BrandLogo";
 
@@ -22,21 +21,14 @@ const PRICE_BANDS = [
   { label: "₹50K - ₹80K", min: 50000, max: 80000 },
 ];
 
-const LOCAL_PRIESTS = [
-  { id: "demo-ramachandra", name: "Sri Ramachandra Sharma", experience: 32, languages: ["Kannada", "Sanskrit", "Tamil"], areas: ["Bengaluru", "South India"], pooja_slugs: ["rudrabhishek", "vivaha", "satyanarayan"], rating: 4.9, reviews_count: 187, tradition: "Smartha Vedic", starting_price_inr: 1800, max_price_inr: 60000, image: require("../../../assets/images/purohit-ramachandra.webp") },
-  { id: "demo-ramesh", name: "Pandit Ramesh Shukla", experience: 28, languages: ["Hindi", "Sanskrit", "English"], areas: ["Delhi NCR", "North India"], pooja_slugs: ["griha-pravesh", "satyanarayan", "navagraha-shanti"], rating: 4.9, reviews_count: 214, tradition: "Kashi Vedic", starting_price_inr: 2100, max_price_inr: 45000, image: require("../../../assets/images/purohit-ramesh.webp") },
-  { id: "demo-suresh", name: "Acharya Suresh Trivedi", experience: 36, languages: ["Marathi", "Hindi", "Sanskrit"], areas: ["Mumbai", "Pune"], pooja_slugs: ["ayudha-puja", "varamahalakshmi-vratha", "namakarna"], rating: 5, reviews_count: 129, tradition: "Vaidika", starting_price_inr: 2500, max_price_inr: 80000, image: require("../../../assets/images/purohit-suresh.webp") },
-];
-
 export default function PriestList({ route, navigation }) {
   const { width } = useWindowDimensions();
-  const { poojaSlug, poojaName } = route.params || {};
-  const { area } = usePreferences();
+  const { poojaSlug, poojaName, area } = route.params || {};
   const desktop = width >= 980;
   const tablet = width >= 720;
   const [priests, setPriests] = useState([]);
   const [language, setLanguage] = useState("All");
-  const [areaFilter, setAreaFilter] = useState(area?.name || "All");
+  const [areaFilter, setAreaFilter] = useState(area || "All");
   const [category, setCategory] = useState(poojaSlug || "all");
   const [query, setQuery] = useState("");
   const [priceBand, setPriceBand] = useState("All");
@@ -52,10 +44,10 @@ export default function PriestList({ route, navigation }) {
       min_price_inr: activePrice.min,
       max_price_inr: activePrice.max,
     })
-      .then((data) => setPriests(data?.priests?.length ? data.priests : LOCAL_PRIESTS))
+      .then((data) => setPriests(data?.priests || []))
       .catch(() => api.get("/priests", { params: { pooja: activePoojaSlug || undefined, area: areaFilter === "All" ? undefined : areaFilter, language: language === "All" ? undefined : language } })
-        .then(({ data }) => setPriests(data?.length ? data : LOCAL_PRIESTS))
-        .catch(() => setPriests(LOCAL_PRIESTS)));
+        .then(({ data }) => setPriests(Array.isArray(data) ? data : []))
+        .catch(() => setPriests([])));
   }, [activePoojaSlug, activePrice.max, activePrice.min, areaFilter, language, query]);
 
   const filtered = useMemo(() => priests.filter((p) => {
@@ -160,7 +152,7 @@ function ActiveChips({ category, language, areaFilter, priceBand, clearAll }) {
 }
 
 function PriestCard({ item, desktop, onPress }) {
-  const imageSource = item.image || (item.photo_url ? { uri: item.photo_url.startsWith("http") ? item.photo_url : `${API_URL}${item.photo_url}` } : require("../../../assets/images/purohit-ramachandra.webp"));
+  const imageSource = item.image || item.localImage || (item.photo_url ? { uri: item.photo_url.startsWith("http") ? item.photo_url : `${API_URL}${item.photo_url}` } : require("../../../assets/images/purohit-ramachandra.webp"));
   const experience = item.experience ?? item.experience_years ?? 0;
   const rating = item.rating ?? item.rating_avg ?? 0;
   const reviews = item.reviews_count ?? item.rating_count ?? 0;
@@ -222,7 +214,7 @@ const styles = StyleSheet.create({
   mobileChipTitle: { color: colors.ink, fontSize: 12, fontWeight: "900", marginTop: 8 },
   chips: { gap: 8, paddingVertical: 10 },
   chip: { height: 36, paddingHorizontal: 13, borderRadius: 18, borderWidth: 1, borderColor: colors.warmBorder, justifyContent: "center" },
-  chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chipActive: { backgroundColor: colors.brandBrown, borderColor: colors.brandBrown },
   chipText: { color: colors.ink, fontSize: 12, fontWeight: "700" },
   chipTextActive: { color: colors.white },
   card: { flex: 1, minWidth: 0, marginBottom: 22, backgroundColor: colors.white },
@@ -242,7 +234,7 @@ const styles = StyleSheet.create({
   bottomRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12 },
   verified: { flexDirection: "row", alignItems: "center", gap: 5 },
   verifiedText: { color: colors.success, fontSize: 11, fontWeight: "800" },
-  action: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.ink, alignItems: "center", justifyContent: "center" },
+  action: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.brandBrown, alignItems: "center", justifyContent: "center" },
   empty: { paddingVertical: 70, alignItems: "center" },
   emptyTitle: { color: colors.ink, fontSize: 17, fontWeight: "900" },
   emptySub: { color: colors.muted2, fontSize: font.sizes.sm, marginTop: 7, textAlign: "center" },

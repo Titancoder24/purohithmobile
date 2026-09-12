@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   address: { color: colors.ink, fontSize: 14, lineHeight: 20, fontWeight: "800" },
   meta: { color: colors.muted2, fontSize: 11, lineHeight: 17, marginTop: 3 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingTop: 14 },
-  primary: { flex: 1, minWidth: 150, minHeight: 50, borderRadius: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.ink, borderBottomWidth: 3, borderBottomColor: "#000" },
+  primary: { flex: 1, minWidth: 150, minHeight: 50, borderRadius: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.brandBrown, borderBottomWidth: 3, borderBottomColor: colors.brandBrownDark },
   primaryText: { color: colors.white, fontSize: 13, fontWeight: "800" },
   secondary: { flex: 1, minWidth: 150, minHeight: 50, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.warmBorder },
   secondaryText: { color: colors.ink, fontSize: 13, fontWeight: "800" },

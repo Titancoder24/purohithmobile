@@ -26,13 +26,41 @@ Deno.serve(async (req) => {
     }
 
     if (body.kind === "profile") {
-      const { data, error } = await supabase.from("priest_profiles")
-        .select("id,user_id,display_name,bio,years_experience,languages,service_areas,pooja_slugs,photo_url,verification_status,rating,review_count,tradition,availability_notes,starting_price_inr,max_price_inr,primary_service_area")
-        .eq("id", body.priest_id)
-        .maybeSingle();
+      const priestId = clean(body.priest_id);
+      const priestSlug = clean(body.priest_slug);
+      if (!priestId && !priestSlug) return json({ error: "Profile identifier is required" }, 400);
+      let profileQuery = supabase.from("priest_profiles")
+        .select("id,user_id,slug,display_name,profile_headline,bio,years_experience,languages,service_areas,pooja_slugs,photo_url,portfolio_urls,verification_status,rating,review_count,tradition,availability_notes,starting_price_inr,max_price_inr,primary_service_area")
+        .eq("verification_status", "verified")
+        .not("photo_url", "is", null)
+        .not("submitted_at", "is", null);
+      profileQuery = priestId ? profileQuery.eq("id", priestId) : profileQuery.eq("slug", priestSlug);
+      const { data, error } = await profileQuery.maybeSingle();
       if (error) throw error;
       if (!data) return json({ error: "Profile not found" }, 404);
-      return json({ profile: mapPriest(data) });
+      const { data: services, error: servicesError } = await supabase.from("priest_services")
+        .select("pooja_slug,price_paise,duration_minutes,is_active")
+        .eq("priest_id", data.id)
+        .eq("is_active", true)
+        .order("price_paise", { ascending: true });
+      if (servicesError) throw servicesError;
+      const { data: reviews, error: reviewsError } = await supabase.from("reviews")
+        .select("id,rating,comment,created_at")
+        .eq("priest_id", data.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (reviewsError) throw reviewsError;
+      return json({
+        profile: {
+          ...mapPriest(data),
+          services: (services || []).map((service: any) => ({
+            pooja_slug: service.pooja_slug,
+            price_inr: Number(service.price_paise || 0) / 100,
+            duration_minutes: service.duration_minutes,
+          })),
+          reviews: reviews || [],
+        },
+      });
     }
 
     const poojaSlug = clean(body.pooja_slug);
@@ -43,12 +71,16 @@ Deno.serve(async (req) => {
     const maxPrice = Number(body.max_price_inr || 0);
 
     let query = supabase.from("priest_profiles")
-      .select("id,user_id,display_name,bio,years_experience,languages,service_areas,pooja_slugs,photo_url,verification_status,rating,review_count,tradition,availability_notes,starting_price_inr,max_price_inr,primary_service_area")
+      .select("id,user_id,slug,display_name,profile_headline,bio,years_experience,languages,service_areas,pooja_slugs,photo_url,portfolio_urls,verification_status,rating,review_count,tradition,availability_notes,starting_price_inr,max_price_inr,primary_service_area")
       .eq("verification_status", "verified")
+      .not("photo_url", "is", null)
+      .not("submitted_at", "is", null)
       .order("rating", { ascending: false })
-      .limit(80);
+      .limit(200);
 
     if (poojaSlug) query = query.contains("pooja_slugs", [poojaSlug]);
+    if (area && area !== "All") query = query.contains("service_areas", [area]);
+    if (language && language !== "All") query = query.contains("languages", [language]);
     if (minPrice > 0) query = query.gte("max_price_inr", minPrice);
     if (maxPrice > 0) query = query.lte("starting_price_inr", maxPrice);
 
@@ -67,10 +99,8 @@ Deno.serve(async (req) => {
         ...areas,
         ...(profile.pooja_slugs || []),
       ].join(" ").toLowerCase();
-      const matchesLanguage = !language || language === "All" || languages.includes(language);
-      const matchesArea = !area || area === "All" || areas.some((item: string) => item.toLowerCase().includes(area.toLowerCase())) || profile.primary_service_area?.toLowerCase().includes(area.toLowerCase());
       const matchesSearch = !q || searchBlob.includes(q);
-      return matchesLanguage && matchesArea && matchesSearch;
+      return matchesSearch;
     });
 
     return json({ priests: filtered.map(mapPriest) });
@@ -93,10 +123,12 @@ function clean(value: unknown) {
 function mapPriest(profile: any) {
   return {
     id: profile.id,
+    slug: profile.slug,
     user_id: profile.user_id,
     name: profile.display_name,
     display_name: profile.display_name,
     bio: profile.bio,
+    profile_headline: profile.profile_headline,
     experience: profile.years_experience,
     experience_years: profile.years_experience,
     languages: profile.languages || [],
@@ -105,6 +137,7 @@ function mapPriest(profile: any) {
     pooja_specialties: profile.pooja_slugs || [],
     pooja_slugs: profile.pooja_slugs || [],
     photo_url: profile.photo_url,
+    portfolio_urls: profile.portfolio_urls || [],
     verified: profile.verification_status === "verified",
     rating: Number(profile.rating || 0),
     reviews_count: profile.review_count || 0,

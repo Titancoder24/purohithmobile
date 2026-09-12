@@ -1,23 +1,22 @@
 import React, { useState } from "react";
 import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Check, ChevronDown, MapPin, X } from "lucide-react-native";
+import { useNavigation } from "@react-navigation/native";
 import { colors, radii, spacing } from "../lib/theme";
 import { usePreferences } from "../lib/preferences";
 import BrandLogo from "./BrandLogo";
 
 export default function AppTopBar({ showLocation = true }) {
-  const { language, setLanguage, area, setArea, areas } = usePreferences();
+  const navigation = useNavigation();
+  const { language, area, setArea, areas } = usePreferences();
   const [open, setOpen] = useState(false);
   return <>
     <View style={styles.bar}>
-      <BrandLogo width={138} height={48} showText={false} style={styles.brand} />
       {showLocation ? <Pressable style={styles.location} onPress={() => setOpen(true)}>
-        <View style={styles.pinTile}><MapPin size={15} color={colors.saffron} /></View><View style={{ flex: 1 }}><Text style={styles.label}>SERVICE LOCATION</Text><Text style={styles.value}>{area.name}, Bengaluru</Text></View><ChevronDown size={16} color={colors.muted2} />
+        <View style={styles.pinTile}><MapPin size={15} color={colors.saffron} /></View><View style={styles.locationCopy}><Text style={styles.label}>SERVICE LOCATION</Text><Text numberOfLines={1} style={styles.value}>{area.name}</Text></View><ChevronDown size={15} color={colors.muted2} />
       </Pressable> : <View style={{ flex: 1 }} />}
-      <View style={styles.language}>
-        <Pressable onPress={() => setLanguage("en")} style={[styles.languageOption, language === "en" && styles.languageActive]}><Text style={[styles.languageText, language === "en" && styles.languageActiveText]}>EN</Text></Pressable>
-        <Pressable onPress={() => setLanguage("kn")} style={[styles.languageOption, language === "kn" && styles.languageActive]}><Text style={[styles.languageText, language === "kn" && styles.languageActiveText]}>ಕ</Text></Pressable>
-      </View>
+      <BrandLogo size={34} compact style={styles.brand} />
+      <Pressable accessibilityLabel="Language settings" onPress={() => navigation.navigate("Settings", { section: "language" })} style={styles.language}><Text style={styles.languageText}>{language === "kn" ? "KN" : "EN"}</Text></Pressable>
     </View>
     <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
       <View style={styles.overlay}><SafeAreaView style={styles.sheet}>
@@ -31,17 +30,15 @@ export default function AppTopBar({ showLocation = true }) {
 }
 
 const styles = StyleSheet.create({
-  bar: { width: "100%", maxWidth: 1180, minHeight: 62, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: spacing.lg, backgroundColor: colors.white, borderBottomWidth: 1, borderColor: colors.warmBorder },
-  brand: { flexShrink: 0, width: 138 },
-  location: { flex: 1, flexDirection: "row", alignItems: "center", gap: 9 },
+  bar: { width: "100%", maxWidth: 1180, minHeight: 66, alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, backgroundColor: colors.white, borderBottomWidth: 1, borderColor: colors.warmBorder },
+  brand: { position: "absolute", left: "50%", marginLeft: -76, width: 152, alignItems: "center", justifyContent: "center" },
+  location: { width: "31%", maxWidth: 210, minWidth: 104, flexDirection: "row", alignItems: "center", gap: 7 },
+  locationCopy: { flex: 1, minWidth: 0 },
   pinTile: { width: 34, height: 34, borderRadius: 10, backgroundColor: "#FFF2EC", alignItems: "center", justifyContent: "center" },
   label: { fontSize: 8, color: colors.muted2, fontWeight: "600", letterSpacing: .5 },
   value: { fontSize: 13, color: colors.ink, fontWeight: "700", marginTop: 1 },
-  language: { flexDirection: "row", padding: 2, borderRadius: 18, backgroundColor: colors.muted },
-  languageOption: { width: 32, height: 28, alignItems: "center", justifyContent: "center", borderRadius: 14 },
-  languageActive: { backgroundColor: colors.white },
-  languageText: { color: colors.muted2, fontSize: 11, fontWeight: "600" },
-  languageActiveText: { color: colors.ink },
+  language: { width: 38, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.brandTint, borderWidth: 1, borderColor: "#E8C2CA" },
+  languageText: { color: colors.brandBrown, fontSize: 10, fontWeight: "800" },
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,.36)" },
   sheet: { maxHeight: "78%", backgroundColor: colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: spacing.lg },
   sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: spacing.lg, borderBottomWidth: 1, borderColor: colors.warmBorder },

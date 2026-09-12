@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
+import * as Linking from "expo-linking";
 
 const extra = Constants.expoConfig?.extra || Constants.manifest?.extra || {};
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || extra.supabaseUrl || "";
@@ -23,13 +24,20 @@ export const supabaseConfig = {
   publishableKey: supabaseAnonKey,
 };
 
+export function authRedirectUrl(path = "auth/callback") {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    return `${window.location.origin}/${path.replace(/^\//, "")}`;
+  }
+  return Linking.createURL(path.replace(/^\//, ""));
+}
+
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         storage: AsyncStorage,
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: false,
+        detectSessionInUrl: Platform.OS === "web",
       },
       global: {
         headers: { "x-application-name": "purohith-connect-expo" },

@@ -6,11 +6,6 @@ import { useAuth } from "../lib/auth";
 import api from "../lib/api";
 import { EmptyState, SearchField, SegmentedControl } from "../components/ProductUI";
 
-const DEMO_THREADS = {
-  customer: [{ id: "demo-confirmed", demo: true, pooja_name: "Satyanarayan Pooja", priest_name: "Demo Purohit", customer_name: "Demo Customer", last: "Namaste. I have received your booking.", time: "13:10", status: "confirmed" }],
-  priest: [{ id: "demo-confirmed", demo: true, pooja_name: "Satyanarayan Pooja", priest_name: "Demo Purohit", customer_name: "Demo Customer", last: "Please confirm the arrival time.", time: "13:10", status: "confirmed" }],
-};
-
 export default function Inbox({ navigation }) {
   const { user } = useAuth();
   const [threads, setThreads] = useState([]);
@@ -18,9 +13,8 @@ export default function Inbox({ navigation }) {
   const [filter, setFilter] = useState("all");
   const isCustomer = user?.role === "customer";
   const load = useCallback(async () => {
-    if (user?.demo) return setThreads(DEMO_THREADS[user.role] || []);
     try { const { data } = await api.get(isCustomer ? "/bookings/customer" : "/bookings/priest"); setThreads((data || []).filter((item) => item.status === "confirmed")); } catch (_) { setThreads([]); }
-  }, [isCustomer, user?.demo, user?.role]);
+  }, [isCustomer]);
   useEffect(() => { load(); }, [load]);
   const visibleThreads = useMemo(() => threads.filter((item) => {
     const contact = isCustomer ? item.priest_name : item.customer_name;
@@ -44,5 +38,5 @@ function Thread({ item, isCustomer, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.white }, content: { width: "100%", maxWidth: 900, alignSelf: "center", padding: 20, paddingBottom: 48 }, header: { marginBottom: 10, paddingTop: 12 }, hero: { paddingBottom: 4 }, heroCopy: { flex: 1, minWidth: 0 }, kicker: { color: colors.saffron, fontSize: 10, fontWeight: "700", letterSpacing: .8 }, titleRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6 }, title: { color: colors.ink, fontSize: 32, fontWeight: "700" }, count: { minWidth: 26, height: 26, paddingHorizontal: 7, borderRadius: 13, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }, countText: { color: colors.ink, fontSize: 11, fontWeight: "700" }, subtitle: { color: colors.muted2, fontSize: 13, lineHeight: 19, marginTop: 5, maxWidth: 420 }, search: { marginTop: 20 }, filters: { marginTop: 12, marginBottom: 14 }, separator: { height: 1, backgroundColor: colors.warmBorder, marginLeft: 66 }, thread: { minHeight: 88, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, paddingHorizontal: 4, borderRadius: 10 }, threadPressed: { backgroundColor: colors.muted }, avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.ink, alignItems: "center", justifyContent: "center" }, avatarText: { color: colors.white, fontSize: 20, fontWeight: "700" }, threadBody: { flex: 1, minWidth: 0 }, row: { flexDirection: "row", justifyContent: "space-between", gap: 8 }, name: { color: colors.ink, fontSize: 15, fontWeight: "700" }, time: { color: colors.muted2, fontSize: 10 }, ceremony: { color: colors.saffron, fontSize: 10, fontWeight: "700", marginTop: 3 }, preview: { color: colors.muted2, fontSize: 12, marginTop: 5 }, actions: { flexDirection: "row", gap: 6 }, messageAction: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors.ink }, callAction: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors.muted },
+  root: { flex: 1, backgroundColor: colors.white }, content: { width: "100%", maxWidth: 900, alignSelf: "center", padding: 20, paddingBottom: 48 }, header: { marginBottom: 10, paddingTop: 12 }, hero: { paddingBottom: 4 }, heroCopy: { flex: 1, minWidth: 0 }, kicker: { color: colors.saffron, fontSize: 10, fontWeight: "700", letterSpacing: .8 }, titleRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6 }, title: { color: colors.ink, fontSize: 32, fontWeight: "700" }, count: { minWidth: 26, height: 26, paddingHorizontal: 7, borderRadius: 13, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }, countText: { color: colors.ink, fontSize: 11, fontWeight: "700" }, subtitle: { color: colors.muted2, fontSize: 13, lineHeight: 19, marginTop: 5, maxWidth: 420 }, search: { marginTop: 20 }, filters: { marginTop: 12, marginBottom: 14 }, separator: { height: 1, backgroundColor: colors.warmBorder, marginLeft: 66 }, thread: { minHeight: 88, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, paddingHorizontal: 4, borderRadius: 10 }, threadPressed: { backgroundColor: colors.muted }, avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.brandBrown, alignItems: "center", justifyContent: "center" }, avatarText: { color: colors.white, fontSize: 20, fontWeight: "700" }, threadBody: { flex: 1, minWidth: 0 }, row: { flexDirection: "row", justifyContent: "space-between", gap: 8 }, name: { color: colors.ink, fontSize: 15, fontWeight: "700" }, time: { color: colors.muted2, fontSize: 10 }, ceremony: { color: colors.saffron, fontSize: 10, fontWeight: "700", marginTop: 3 }, preview: { color: colors.muted2, fontSize: 12, marginTop: 5 }, actions: { flexDirection: "row", gap: 6 }, messageAction: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors.brandBrown }, callAction: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors.muted },
 });

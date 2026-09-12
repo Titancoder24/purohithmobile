@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import * as Location from "expo-location";
 import { Clock3, LocateFixed, Navigation, ShieldCheck } from "lucide-react-native";
 import { colors, radii } from "../../lib/theme";
 import { Button } from "../../components/UI";
 import OpenStreetMap from "../../components/OpenStreetMap";
 import MapplsDrawer from "../../components/MapplsDrawer";
 import { usePreferences } from "../../lib/preferences";
-import api from "../../lib/api";
+import { getBookingLocation, setTrackingConsent } from "../../lib/payments";
 
 export default function TrackPriest({ route }) {
   const { booking } = route.params || {};
@@ -20,7 +19,7 @@ export default function TrackPriest({ route }) {
 
   const refresh = useCallback(async () => {
     try {
-      const { data } = await api.get(`/bookings/${booking.id}/location`);
+      const data = await getBookingLocation(booking.id);
       setTrackingStatus(data.tracking_status);
       if (data.location) {
         setLocation(data.location);
@@ -36,14 +35,23 @@ export default function TrackPriest({ route }) {
   }, [booking?.id, consented, refresh]);
 
   const enable = async () => {
-    const permission = await Location.requestForegroundPermissionsAsync();
-    if (permission.status !== "granted") return Alert.alert("Location permission required", "Enable location access to use live arrival tracking.");
     try {
-      const { data } = await api.post(`/bookings/${booking.id}/tracking-consent`, { enabled: true });
+      const data = await setTrackingConsent(booking.id, true);
       setConsented(true);
       setTrackingStatus(data.tracking_status);
     } catch (error) {
-      Alert.alert("Unable to enable tracking", error?.response?.data?.detail || "Please try again.");
+      Alert.alert("Unable to enable tracking", error?.message || "Please try again.");
+    }
+  };
+  const disable = async () => {
+    try {
+      const data = await setTrackingConsent(booking.id, false);
+      setConsented(false);
+      setTrackingStatus(data.tracking_status);
+      setLocation(null);
+      setUpdatedAt("");
+    } catch (error) {
+      Alert.alert("Unable to disable tracking", error?.message || "Please try again.");
     }
   };
 
@@ -61,7 +69,7 @@ export default function TrackPriest({ route }) {
       <View style={{ flex: 1 }}><Text style={styles.statusTitle}>{trackingStatus === "active" ? "Purohit is sharing location" : consented ? "Waiting for purohit consent" : "Location sharing is off"}</Text><Text style={styles.statusMeta}>{updatedAt ? `Updated ${new Date(updatedAt).toLocaleTimeString()}` : "Tracking starts only after both parties consent."}</Text></View>
     </View>
 
-    {!consented ? <Button title="Allow location and continue" icon={LocateFixed} onPress={enable} /> : null}
+    {!consented ? <Button title="Enable arrival tracking" icon={LocateFixed} onPress={enable} /> : <Button title="Disable arrival tracking" variant="outline" onPress={disable} />}
     <View style={styles.privacy}><ShieldCheck size={17} color={colors.success} /><Text style={styles.privacyText}>Location is visible only for this confirmed booking and expires after the ceremony window.</Text></View>
     <View style={styles.help}><Clock3 size={17} color={colors.muted2} /><Text style={styles.helpText}>If the map has not updated recently, call the purohit from your booking details.</Text></View>
     <MapplsDrawer visible={mapOpen} onClose={() => setMapOpen(false)} location={{ latitude, longitude, address: booking?.address || area.name, title: "Live priest location" }} />
