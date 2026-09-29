@@ -5,14 +5,22 @@ export async function openCashfreeCheckout(order) {
     throw new Error("Cashfree did not return a valid payment session.");
   }
 
+  // If running inside Expo Go where native SDK is not bundled, fallback to Cashfree Web Checkout URL
   if (!NativeModules.CashfreePgApi && !NativeModules.CashfreeEventEmitter) {
-    // Native Cashfree SDK is not compiled into standard Expo Go
-    if (order.payment_url) {
-      await Linking.openURL(order.payment_url);
-      return { orderId: order.order_id };
+    const isProd = order.environment === "production";
+    const webUrl =
+      order.payment_url ||
+      order.payment_link ||
+      `https://${isProd ? "payments" : "payments-test"}.cashfree.com/order/#${order.payment_session_id}`;
+
+    const supported = await Linking.canOpenURL(webUrl).catch(() => true);
+    if (supported) {
+      await Linking.openURL(webUrl);
+      return { orderId: order.order_id, fallbackWeb: true };
     }
+
     throw new Error(
-      "Cashfree native SDK is not bundled into Expo Go. Use Web or a custom EAS development build to test native payments."
+      "Cashfree native SDK is not bundled into Expo Go. Use a custom EAS development build or APK to test native SDK payments."
     );
   }
 
@@ -37,3 +45,4 @@ export async function openCashfreeCheckout(order) {
     CFPaymentGatewayService.doWebPayment(session);
   });
 }
+
