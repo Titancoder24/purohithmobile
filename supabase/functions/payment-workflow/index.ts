@@ -24,6 +24,7 @@ Deno.serve(async (req) => {
     if (body.action === "list_proposals") return listProposals(supabase, body, identity);
     if (body.action === "award_proposal") return awardProposal(supabase, body, identity);
     if (body.action === "provider_requests") return providerRequests(supabase, body, identity);
+    if (body.action === "customer_requests") return customerRequests(supabase, identity);
     if (body.action === "send_proposal") return sendProposal(supabase, body, identity);
     if (body.action === "create_cashfree_order") return createCashfreeOrder(supabase, body, identity);
     if (body.action === "verify_cashfree_order") return verifyCashfreeOrder(supabase, body, identity);
@@ -203,6 +204,34 @@ async function providerRequests(supabase: any, _body: any, identity: any) {
   return json({ requests: filtered.map((item: any) => mapProviderRequest({ ...item, pooja_name: poojaNames[item.pooja_slug] }, myProposals[item.id])) });
 }
 
+async function customerRequests(supabase: any, identity: any) {
+  const userId = identity.id;
+  if (!userId) return json({ requests: [] });
+  const { data: requests, error } = await supabase.from("ceremony_requests")
+    .select("id,pooja_slug,ceremony_date,ceremony_time,address,landmark,notes,budget_min_inr,budget_max_inr,status,payment_status,awarded_proposal_id,latitude,longitude,created_at")
+    .eq("customer_id", userId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  const poojaSlugs = [...new Set((requests || []).map((r: any) => r.pooja_slug).filter(Boolean))];
+  const { data: poojas } = poojaSlugs.length ? await supabase.from("poojas").select("slug,name").in("slug", poojaSlugs) : { data: [] };
+  const poojaNames = Object.fromEntries((poojas || []).map((p: any) => [p.slug, p.name]));
+  const requestIds = (requests || []).map((r: any) => r.id);
+  let proposalCounts: Record<string, number> = {};
+  if (requestIds.length) {
+    const { data: proposals } = await supabase.from("ceremony_proposals").select("request_id").in("request_id", requestIds);
+    (proposals || []).forEach((p: any) => {
+      proposalCounts[p.request_id] = (proposalCounts[p.request_id] || 0) + 1;
+    });
+  }
+  return json({
+    requests: (requests || []).map((r: any) => ({
+      ...r,
+      pooja_name: poojaNames[r.pooja_slug] || r.pooja_slug || "Ceremony",
+      proposal_count: proposalCounts[r.id] || 0,
+    })),
+  });
+}
+
 async function sendProposal(supabase: any, body: any, identity: any) {
   const userId = identity.id;
   const requestId = cleanUuid(body.request_id);
@@ -232,6 +261,7 @@ async function createCashfreeOrder(supabase: any, body: any, identity: any) {
   let booking: any = null;
   let priestId: string | null = null;
   let poojaSlug = clean(body.pooja_slug);
+  const feePercent = await getPlatformServiceFeePercent(supabase);
   let amountPaise = 0;
 
   if (requestId) {
@@ -307,7 +337,11 @@ async function createCashfreeOrder(supabase: any, body: any, identity: any) {
   const returnUrl = clean(Deno.env.get("CASHFREE_RETURN_URL")) || "https://purohit-marketplace-project.vercel.app/home?cashfree_order_id={order_id}";
   const notifyUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/cashfree-webhook`;
   const { data: customer } = await supabase.from("app_users").select("full_name,email,phone").eq("id", identity.id).maybeSingle();
-  if (!customer?.phone) return json({ error: "Add a verified phone number to your profile before payment" }, 409);
+  let customerPhone = customer?.phone || clean(body.customer_phone);
+  if (!customerPhone) return json({ error: "Add a verified phone number to your profile before payment" }, 409);
+  if (!customer?.phone && customerPhone) {
+    await supabase.from("app_users").update({ phone: customerPhone, updated_at: new Date().toISOString() }).eq("id", identity.id);
+  }
 
   const payload = {
     order_id: merchantOrderId,
@@ -315,9 +349,9 @@ async function createCashfreeOrder(supabase: any, body: any, identity: any) {
     order_currency: "INR",
     customer_details: {
       customer_id: identity.id,
-      customer_name: customer.full_name || "Purohith Connect customer",
-      customer_email: customer.email || identity.email,
-      customer_phone: customer.phone,
+      customer_name: customer?.full_name || "Purohith Connect customer",
+      customer_email: customer?.email || identity.email,
+      customer_phone: customerPhone,
     },
     order_meta: { return_url: returnUrl, notify_url: notifyUrl },
     order_note: `Purohith Connect booking ${bookingId}`,
@@ -340,7 +374,15 @@ async function createCashfreeOrder(supabase: any, body: any, identity: any) {
     provider_status: providerOrder.order_status,
     return_url: returnUrl,
     expires_at: providerOrder.order_expiry_time || null,
-    metadata: { cf_order: sanitizeProviderPayload(providerOrder) },
+    metadata: {
+      cf_order: sanitizeProviderPayload(providerOrder),
+      fee_breakdown: {
+        service_fee_percent: feePercent,
+        gross_paise: amountPaise,
+        platform_fee_paise: Math.round(amountPaise * (feePercent / 100)),
+        net_paise: amountPaise - Math.round(amountPaise * (feePercent / 100)),
+      },
+    },
   }).select("*").single();
   if (error) throw error;
 
@@ -394,6 +436,8 @@ async function insertPendingBooking(supabase: any, details: any) {
   ]);
   if (!priest || !pooja) throw new Error("Purohit or ceremony not found");
   const total = Math.round(Number(details.amountPaise) / 100);
+  const baseInr = details.baseInr || total;
+  const serviceFeeInr = details.serviceFeeInr || 0;
   const subtotal = Math.round(total / 1.18);
   const { data, error } = await supabase.from("bookings").insert({
     customer_id: details.customerId,
@@ -416,7 +460,8 @@ async function insertPendingBooking(supabase: any, details: any) {
     customer_email: customer?.email || "",
     priest_name: priest.display_name,
     pooja_name: pooja.name,
-    pooja_price_inr: total,
+    pooja_price_inr: baseInr,
+    service_fee_inr: serviceFeeInr,
     addons_total_inr: 0,
     payment_provider: "cashfree",
   }).select("*").single();
@@ -460,7 +505,10 @@ async function markBookingPaid(supabase: any, order: any) {
     updated_at: new Date().toISOString(),
   }).eq("id", booking.id);
   if (order.request_id) await supabase.from("ceremony_requests").update({ payment_status: "paid", status: "awarded", updated_at: new Date().toISOString() }).eq("id", order.request_id);
-  const platformFee = Math.round(Number(order.amount_paise) * 0.1);
+  const feePercent = Number(order.metadata?.fee_breakdown?.service_fee_percent) || await getPlatformServiceFeePercent(supabase);
+  const platformFee = typeof order.metadata?.fee_breakdown?.platform_fee_paise === "number"
+    ? order.metadata.fee_breakdown.platform_fee_paise
+    : Math.round(Number(order.amount_paise) * (feePercent / 100));
   await supabase.from("provider_earnings").upsert({
     booking_id: booking.id,
     payment_order_id: order.id,
@@ -673,6 +721,21 @@ async function cashfreeRequest(path: string, options: any) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.message || payload.type || `Cashfree request failed (${response.status})`);
   return payload;
+}
+
+async function getPlatformServiceFeePercent(supabase: any): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from("platform_settings")
+      .select("value")
+      .eq("key", "payment_service_fee_percent")
+      .maybeSingle();
+    if (error || !data?.value) return 10;
+    const parsed = Number(data.value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 10;
+  } catch {
+    return 10;
+  }
 }
 
 function cashfreeConfigured() {

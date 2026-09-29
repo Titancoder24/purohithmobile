@@ -5,6 +5,7 @@ import { colors } from "../lib/theme";
 import { useAuth } from "../lib/auth";
 import api from "../lib/api";
 import { EmptyState, SearchField, SegmentedControl } from "../components/ProductUI";
+import { startInAppCall } from "../lib/calls";
 
 export default function Inbox({ navigation }) {
   const { user } = useAuth();
@@ -34,7 +35,7 @@ export default function Inbox({ navigation }) {
 
 function Thread({ item, isCustomer, navigation }) {
   const other = isCustomer ? item.priest_name : item.customer_name;
-  return <Pressable onPress={() => navigation.navigate("Conversation", { bookingId: item.id })} style={({ pressed }) => [styles.thread, pressed && styles.threadPressed]}><View style={styles.avatar}><Text style={styles.avatarText}>{(other || "P").slice(0, 1)}</Text></View><View style={styles.threadBody}><View style={styles.row}><Text style={styles.name}>{other || "Booking contact"}</Text><Text style={styles.time}>{item.time || ""}</Text></View><Text style={styles.ceremony}>{item.pooja_name}</Text><Text style={styles.preview} numberOfLines={1}>{item.last || "Start the conversation"}</Text></View><View style={styles.actions}><Pressable accessibilityLabel="Open messages" onPress={() => navigation.navigate("Conversation", { bookingId: item.id })} style={styles.messageAction}><MessageSquareText size={17} color={colors.white} /></Pressable><Pressable accessibilityLabel="Open video call" onPress={() => navigation.navigate("CallRoom", { bookingId: item.id })} style={styles.callAction}><Phone size={16} color={colors.ink} /></Pressable></View></Pressable>;
+  return <Pressable onPress={() => navigation.navigate("Conversation", { bookingId: item.id })} style={({ pressed }) => [styles.thread, pressed && styles.threadPressed]}><View style={styles.avatar}><Text style={styles.avatarText}>{(other || "P").slice(0, 1)}</Text></View><View style={styles.threadBody}><View style={styles.row}><Text style={styles.name}>{other || "Booking contact"}</Text><Text style={styles.time}>{item.time || ""}</Text></View><Text style={styles.ceremony}>{item.pooja_name}</Text><Text style={styles.preview} numberOfLines={1}>{item.last || "Start the conversation"}</Text></View><View style={styles.actions}><Pressable accessibilityLabel="Open messages" onPress={() => navigation.navigate("Conversation", { bookingId: item.id })} style={styles.messageAction}><MessageSquareText size={17} color={colors.white} /></Pressable><Pressable accessibilityLabel="Call contact" onPress={() => startInAppCall(navigation, { bookingId: item.id, booking: item })} style={styles.callAction}><Phone size={16} color={colors.ink} /></Pressable></View></Pressable>;
 }
 
 const styles = StyleSheet.create({

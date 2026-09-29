@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TextInput, Alert, Pressable, Platform, ActivityIndicator, useWindowDimensions } from "react-native";
-import { Check, Download, ShieldCheck, UserRound, WalletCards } from "lucide-react-native";
+import { Check, Download, Info, Send, ShieldCheck, UserRound, WalletCards } from "lucide-react-native";
 import { colors, radii, spacing, font, shadow } from "../../lib/theme";
 import { Button, Card, Field } from "../../components/UI";
 import { useI18n } from "../../lib/i18n";
@@ -35,7 +35,7 @@ function upcomingDates(days = 14) {
 
 export default function Booking({ route, navigation }) {
   const { t, language } = useI18n();
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const { priestId, poojaSlug: routePoojaSlug } = route.params || {};
   const [pooja, setPooja] = useState(() => findDefaultPooja(routePoojaSlug));
   const [poojaCatalog, setPoojaCatalog] = useState(DEFAULT_POOJAS);
@@ -47,6 +47,7 @@ export default function Booking({ route, navigation }) {
   const [time, setTime] = useState("");
   const [address, setAddress] = useState("");
   const [landmark, setLandmark] = useState("");
+  const [phone, setPhone] = useState(user?.phone || "");
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -98,26 +99,92 @@ export default function Booking({ route, navigation }) {
       });
   }, [selectedPoojaSlug]);
 
+  const offeredSlugs = useMemo(() => {
+    if (!priest) return null;
+    const fromServices = (priest.services || []).map((s) => s.pooja_slug);
+    const fromSlugs = priest.pooja_slugs || [];
+    const fromSpecialties = (priest.pooja_specialties || priest.poojas_offered || []).map(normalizePoojaSlug);
+    const list = [...fromServices, ...fromSlugs, ...fromSpecialties].filter(Boolean);
+    return list.length > 0 ? new Set(list) : null;
+  }, [priest]);
+
+  const availablePoojas = useMemo(() => {
+    if (!offeredSlugs) return poojaCatalog;
+    const filtered = poojaCatalog.filter((item) => offeredSlugs.has(item.slug));
+    return filtered.length > 0 ? filtered : poojaCatalog;
+  }, [offeredSlugs, poojaCatalog]);
+
+  // When priest profile or offered poojas are ready, ensure selected pooja is an offered ceremony
+  useEffect(() => {
+    if (!availablePoojas?.length) return;
+    const isCurrentOffered = availablePoojas.some((item) => item.slug === selectedPoojaSlug);
+    if (!isCurrentOffered) {
+      const withService = availablePoojas.find((item) => priest?.services?.some((s) => s.pooja_slug === item.slug));
+      const nextChoice = withService || availablePoojas[0];
+      if (nextChoice) {
+        setSelectedPoojaSlug(nextChoice.slug);
+        setPooja(normalizePooja(nextChoice));
+      }
+    }
+  }, [availablePoojas, selectedPoojaSlug, priest?.services]);
+
+  const publishedService = useMemo(() => {
+    return priest?.services?.find((service) => service.pooja_slug === selectedPoojaSlug);
+  }, [priest?.services, selectedPoojaSlug]);
+
+  const isOfferedCeremony = useMemo(() => {
+    if (!availablePoojas?.length) return true;
+    return availablePoojas.some((item) => item.slug === selectedPoojaSlug);
+  }, [availablePoojas, selectedPoojaSlug]);
+
   const totals = useMemo(() => {
     if (!pooja) return { pooja_price: 0, addons: 0, subtotal: 0, gst: 0 };
-    const publishedService = priest?.services?.find((service) => service.pooja_slug === selectedPoojaSlug);
-    const subtotal = Number(publishedService?.price_inr || pooja.base_price || 0);
+    const price = publishedService?.price_inr
+      ?? (priest?.starting_price_inr ? Number(priest.starting_price_inr) : null)
+      ?? pooja.base_price
+      ?? 0;
+    const pooja_price = Number(price || 0);
+    const subtotal = pooja_price;
     const base = +(subtotal / 1.18).toFixed(2);
     const gst = +(subtotal - base).toFixed(2);
-    return { pooja_price: subtotal, addons: 0, subtotal, gst };
-  }, [pooja, priest?.services, selectedPoojaSlug]);
+    return { pooja_price, addons: 0, subtotal, gst };
+  }, [pooja, publishedService, priest]);
+
+  useEffect(() => {
+    if (user?.phone && !phone) {
+      setPhone(user.phone);
+    }
+  }, [user?.phone, phone]);
 
   const submit = async () => {
     if (!date || !time || !address) return Alert.alert("Missing", "Choose date, time and address");
+    const cleanPhone = (phone || user?.phone || "").replace(/\D/g, "").slice(-10);
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      return Alert.alert(
+        "Mobile Number Required",
+        "Please enter a valid 10-digit mobile number for order confirmation, priest coordination, and secure payment processing."
+      );
+    }
+    if (!isOfferedCeremony) {
+      return Alert.alert(
+        "Ceremony Unavailable",
+        `${priest?.name || "This purohit"} does not typically perform ${pooja?.name || "this ceremony"}. Please choose an available ceremony from their specialties above.`,
+        [{ text: "OK" }]
+      );
+    }
     setBusy(true);
     try {
       if (!user?.id || user?.demo) throw new Error("demo");
+      if (updateProfile) {
+        await updateProfile({ phone: cleanPhone });
+      }
       const data = await createCashfreeOrder({
         priest_id: priestId,
         pooja_slug: selectedPoojaSlug,
         booking_date: date,
         booking_time: time,
         address, landmark, notes, customer_email: email,
+        customer_phone: cleanPhone,
       });
       await openCashfreeCheckout(data.order);
       const verified = await verifyCashfreeOrder({ payment_order_id: data.order.id });
@@ -138,7 +205,22 @@ export default function Booking({ route, navigation }) {
       if (user?.demo) {
         return setConfirmed({ id: `demo-${Date.now()}`, priest_name: priest.name, pooja_name: pooja.name, booking_date: date, booking_time: time, total_amount: totals.subtotal, invoice_no: "DEMO/0001" });
       }
-      Alert.alert("Failed", e?.message || e?.response?.data?.detail || "Booking failed");
+      const errMsg = e?.message || e?.response?.data?.detail || "Booking failed";
+      if (errMsg.includes("not published a price")) {
+        Alert.alert(
+          "Pricing In Progress",
+          `${priest?.name || "This purohit"} is still confirming published rates for ${pooja?.name || "this ceremony"}. Would you like to request custom proposals from nearby verified purohits?`,
+          [
+            { text: "Change ceremony", style: "cancel" },
+            {
+              text: "Request proposals",
+              onPress: () => navigation.navigate("RequestPooja", { poojaSlug: selectedPoojaSlug, poojaName: pooja?.name }),
+            },
+          ]
+        );
+      } else {
+        Alert.alert("Failed", errMsg);
+      }
     } finally { setBusy(false); }
   };
 
@@ -171,25 +253,67 @@ export default function Booking({ route, navigation }) {
       <ScrollView contentContainerStyle={[styles.content, desktop && styles.contentDesktop]}>
         <Text style={styles.eyebrow}>REVIEW AND CONTINUE</Text>
         <Text style={styles.h1}>{pooja.name}</Text>
-        <View style={styles.providerSummary}><View style={styles.providerAvatar}><UserRound size={20} color={colors.ink} /></View><View style={{ flex: 1 }}><Text style={styles.providerName}>{priest.name}</Text><Text style={styles.sub}>Verified purohit · Published service price ₹{totals.subtotal.toLocaleString("en-IN")}</Text></View></View>
+        <View style={styles.providerSummary}>
+          <View style={styles.providerAvatar}><UserRound size={20} color={colors.ink} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.providerName}>{priest.name}</Text>
+            <Text style={styles.sub}>
+              Verified purohit · Ceremony fee ₹{totals.subtotal.toLocaleString("en-IN")}
+            </Text>
+          </View>
+        </View>
         <View style={styles.steps}><Step active number="1" label="Schedule" /><View style={styles.stepLine} /><Step number="2" label="Details" /><View style={styles.stepLine} /><Step number="3" label="Review" /></View>
 
         <View style={desktop ? styles.checkoutGrid : undefined}>
         <View style={desktop ? styles.formPane : undefined}>
-        <Field label="Choose ceremony">
+        <Field label="Choose ceremony" required>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ceremonyList}>
-            {poojaCatalog.map((item) => {
+            {availablePoojas.map((item) => {
               const active = item.slug === selectedPoojaSlug;
-              return <Pressable key={item.slug} onPress={() => setSelectedPoojaSlug(item.slug)} style={[styles.ceremonyChip, active && styles.ceremonyChipActive]}>
-                <Text style={[styles.ceremonyName, active && styles.ceremonyNameActive]}>{item.name}</Text>
-                <Text style={[styles.ceremonyPrice, active && styles.ceremonyNameActive]}>from ₹{Number(item.base_price_inr || item.base_price || 0).toLocaleString("en-IN")}</Text>
-              </Pressable>;
+              const service = priest?.services?.find((s) => s.pooja_slug === item.slug);
+              const price = service ? Number(service.price_inr) : (priest?.starting_price_inr ? Number(priest.starting_price_inr) : Number(item.base_price_inr || item.base_price || 0));
+              return (
+                <Pressable
+                  key={item.slug}
+                  onPress={() => {
+                    setSelectedPoojaSlug(item.slug);
+                    setPooja(normalizePooja(item));
+                  }}
+                  style={[styles.ceremonyChip, active && styles.ceremonyChipActive]}
+                >
+                  <Text style={[styles.ceremonyName, active && styles.ceremonyNameActive]}>{item.name}</Text>
+                  <Text style={[styles.ceremonyPrice, active && styles.ceremonyNameActive]}>
+                    ₹{price.toLocaleString("en-IN")}
+                  </Text>
+                </Pressable>
+              );
             })}
           </ScrollView>
         </Field>
 
+        {!isOfferedCeremony ? (
+          <View style={styles.ceremonyNotice}>
+            <View style={styles.noticeIconWrap}>
+              <Info size={15} color={colors.brandBrown} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.noticeTitle}>Custom ceremony request</Text>
+              <Text style={styles.noticeBody}>
+                {priest.name} does not list this ceremony in their standard offerings. You can select an offered specialty above or request custom proposals.
+              </Text>
+              <Pressable
+                onPress={() => navigation.navigate("RequestPooja", { poojaSlug: selectedPoojaSlug, poojaName: pooja.name })}
+                style={styles.noticeBtn}
+              >
+                <Send size={12} color={colors.brandBrown} />
+                <Text style={styles.noticeBtnText}>Request custom proposals</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
         {/* Date scroller */}
-        <Field label="Select date">
+        <Field label="Select date" required>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {upcomingDates().map((d) => {
               const iso = fmtDate(d);
@@ -214,7 +338,7 @@ export default function Booking({ route, navigation }) {
         </Field>
 
         {/* Time slots */}
-        <Field label="Time slot">
+        <Field label="Time slot" required>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {TIME_SLOTS.map(s => (
               <Pressable
@@ -230,12 +354,24 @@ export default function Booking({ route, navigation }) {
         </Field>
 
         {/* Address */}
-        <Field label="Address">
+        <Field label="Address" required>
           <TextInput testID="booking-address" multiline value={address} onChangeText={setAddress}
             placeholder="Flat, street, area, Bengaluru" style={[styles.input, { minHeight: 80, paddingVertical: 12 }]} />
         </Field>
         <Field label="Landmark (optional)">
           <TextInput testID="booking-landmark" value={landmark} onChangeText={setLandmark} placeholder="Near ABC temple" style={styles.input} />
+        </Field>
+        {/* Contact Phone */}
+        <Field label="Mobile number (required for booking & payment)" required>
+          <TextInput
+            testID="booking-phone"
+            keyboardType="phone-pad"
+            maxLength={10}
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="10-digit mobile number"
+            style={styles.input}
+          />
         </Field>
         <Field label="Email for invoice (optional)">
           <TextInput testID="booking-email" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} placeholder="you@example.com" style={styles.input} />
@@ -270,7 +406,12 @@ export default function Booking({ route, navigation }) {
             ₹{totals.subtotal.toLocaleString("en-IN")}
           </Text>
         </View>
-        <Button testID="pay-btn" title={busy ? "Opening secure checkout…" : `${t.payNow} with Cashfree`} onPress={submit} disabled={busy} />
+        <Button
+          testID="pay-btn"
+          title={!isOfferedCeremony ? "Select an offered ceremony" : busy ? "Opening secure checkout…" : `${t.payNow} with Cashfree`}
+          onPress={submit}
+          disabled={busy || !isOfferedCeremony}
+        />
       </View>
     </View>
   );
@@ -292,6 +433,21 @@ function normalizePooja(item) {
     ...item,
     base_price: Number(item?.base_price ?? item?.base_price_inr ?? 0),
   };
+}
+
+function normalizePoojaSlug(value) {
+  const text = String(value || "").toLowerCase();
+  if (!text) return "";
+  if (text.includes("satya")) return "satyanarayan";
+  if (text.includes("griha") || text.includes("gruh")) return "griha-pravesh";
+  if (text.includes("rudra")) return "rudrabhishek";
+  if (text.includes("ganesha") || text.includes("gauri")) return "gauri-ganesha-vratha";
+  if (text.includes("ayudha")) return "ayudha-puja";
+  if (text.includes("navagraha")) return "navagraha-shanti";
+  if (text.includes("lakshmi") || text.includes("varamahalakshmi")) return "varamahalakshmi-vratha";
+  if (text.includes("namakar")) return "namakarna";
+  if (text.includes("vivaha")) return "vivaha";
+  return text.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
 function findDefaultPooja(slug) {
@@ -355,5 +511,55 @@ const styles = StyleSheet.create({
     position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.lg,
     backgroundColor: colors.white, borderTopWidth: 1, borderColor: colors.warmBorder,
     ...(Platform.OS === "ios" && { paddingBottom: 24 }),
+  },
+  ceremonyNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#FDF9F2",
+    borderWidth: 1,
+    borderColor: "#EFE3CD",
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  noticeIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#F5EAD4",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  noticeTitle: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 3,
+  },
+  noticeBody: {
+    color: colors.muted2,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  noticeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+    alignSelf: "flex-start",
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.brandBrown,
+  },
+  noticeBtnText: {
+    color: colors.brandBrown,
+    fontSize: 11,
+    fontWeight: "700",
   },
 });

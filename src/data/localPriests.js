@@ -84,5 +84,12 @@ export const LOCAL_PRIESTS = [
 ];
 
 export function getLocalPriest(priestId) {
-  return LOCAL_PRIESTS.find((priest) => priest.id === priestId) || null;
+  const priest = LOCAL_PRIESTS.find((item) => item.id === priestId);
+  if (!priest) return null;
+  const services = priest.services || (priest.pooja_slugs || []).map((slug) => ({
+    pooja_slug: slug,
+    price_inr: priest.starting_price_inr || 1500,
+    duration_minutes: 90,
+  }));
+  return { ...priest, services };
 }

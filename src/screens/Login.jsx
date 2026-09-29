@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
 import { ArrowLeft, Mail, UserRound, ShieldCheck, KeyRound } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radii, spacing, font } from "../lib/theme";
 import { useI18n } from "../lib/i18n";
 import { Button, Field } from "../components/UI";
@@ -18,6 +19,7 @@ function normalizeEmail(value) {
 }
 
 export default function Login() {
+  const insets = useSafeAreaInsets();
   const { t } = useI18n();
   const { role, resetRole, restoreWithBiometric, applySupabaseSession } = useAuth();
   const [email, setEmail] = useState("");
@@ -29,6 +31,17 @@ export default function Login() {
   const [formError, setFormError] = useState("");
   const [loading, setLoading] = useState(false);
   const [hasRefresh, setHasRefresh] = useState(false);
+
+  const handleBack = () => {
+    if (stage === "otp" || stage === "reset") {
+      setStage("email");
+      setOtp("");
+      setFormError("");
+      setNotice("");
+      return;
+    }
+    resetRole();
+  };
 
   useEffect(() => {
     tokens.getRefresh().then(rt => setHasRefresh(!!rt));
@@ -150,12 +163,22 @@ export default function Login() {
     if (!ok) Alert.alert("Session expired", "Please sign in with OTP again.");
   };
 
+  const topPadding = Math.max(insets.top, 16) + 8;
+
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.cotton }}
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.white }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.body, { paddingTop: topPadding }]} keyboardShouldPersistTaps="handled">
         <View style={styles.topRow}>
-          <Pressable accessibilityLabel="Choose account type" onPress={resetRole} hitSlop={12} style={styles.back}><ArrowLeft size={20} color={colors.brandBrown} /></Pressable>
+          <Pressable
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+            onPress={handleBack}
+            hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+            style={({ pressed }) => [styles.back, pressed && { opacity: 0.6, transform: [{ scale: 0.95 }] }]}
+          >
+            <ArrowLeft size={20} color={colors.brandBrown} />
+          </Pressable>
           <View style={styles.roleBadge}><Text style={styles.roleBadgeText}>{role === "priest" ? "PRIEST APP" : "BOOKING APP"}</Text></View>
         </View>
         <View style={styles.brandRow}><BrandLogo width={214} height={96} showText={false} /><Text style={styles.brandMode}>{role === "priest" ? "Purohit partner workspace" : "Book trusted Vedic services"}</Text></View>
@@ -274,7 +297,7 @@ export default function Login() {
 }
 
 const styles = StyleSheet.create({
-  body: { width: "100%", maxWidth: 560, alignSelf: "center", paddingHorizontal: 24, paddingTop: 20, paddingBottom: 48, gap: spacing.md, backgroundColor: colors.white, minHeight: "100%" },
+  body: { width: "100%", maxWidth: 560, alignSelf: "center", paddingHorizontal: 24, paddingBottom: 48, gap: spacing.md, backgroundColor: colors.white, minHeight: "100%" },
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   back: { width: 44, height: 44, borderWidth: 1, borderColor: "#E4C8CE", borderRadius: 22, alignItems: "center", justifyContent: "center" },
   roleBadge: { borderRadius: radii.pill, backgroundColor: colors.brandTint, paddingHorizontal: 11, paddingVertical: 7 },

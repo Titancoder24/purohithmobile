@@ -27,8 +27,16 @@ export default function PriestDetail({ route, navigation }) {
   const experience = priest.experience ?? priest.experience_years ?? 0;
   const rating = priest.rating ?? priest.rating_avg ?? 0;
   const reviewCount = priest.reviews_count ?? priest.rating_count ?? reviews.length;
-  const specialties = priest.pooja_specialties || priest.poojas_offered || priest.poojas || [];
-  const defaultPoojaSlug = poojaSlug || normalizePoojaSlug(specialties[0]) || "satyanarayan";
+  const specialties = priest.pooja_specialties || priest.pooja_slugs || priest.poojas_offered || priest.poojas || [];
+  const offeredSlugs = new Set([
+    ...(priest.services || []).map((s) => s.pooja_slug),
+    ...(priest.pooja_slugs || []),
+    ...specialties.map(normalizePoojaSlug),
+  ].filter(Boolean));
+  const isRequestedPoojaOffered = Boolean(poojaSlug && (offeredSlugs.has(poojaSlug) || offeredSlugs.has(normalizePoojaSlug(poojaSlug))));
+  const defaultPoojaSlug = isRequestedPoojaOffered
+    ? poojaSlug
+    : (priest.services?.[0]?.pooja_slug || (priest.pooja_slugs && priest.pooja_slugs[0]) || normalizePoojaSlug(specialties[0]) || "satyanarayan");
   const serviceAreas = priest.areas || priest.service_areas || [];
   const starting = priest.starting_price_inr || 100;
   const maxPrice = priest.max_price_inr || 80000;
@@ -38,6 +46,13 @@ export default function PriestDetail({ route, navigation }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.white }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+        {poojaSlug && !isRequestedPoojaOffered ? (
+          <View style={styles.notOfferedBanner}>
+            <Text style={styles.notOfferedText}>
+              {priest.name} does not perform {labelFromSlug(poojaSlug)}. You can book their available ceremonies below, or request proposals from other purohits.
+            </Text>
+          </View>
+        ) : null}
         <View style={[styles.hero, desktop && styles.heroDesktop]}>
           <View style={styles.portraitWrap}><Image source={portrait} style={[styles.avatar, desktop && styles.avatarDesktop]} /><View style={styles.onlineDot} /></View>
           <View style={[styles.heroBody, desktop && styles.heroBodyDesktop]}>
@@ -120,6 +135,18 @@ function labelFromSlug(slug) {
 }
 
 const styles = StyleSheet.create({
+  notOfferedBanner: {
+    backgroundColor: "#FFF8F0",
+    borderBottomWidth: 1,
+    borderColor: colors.warmBorder,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  notOfferedText: {
+    color: colors.brandBrownDark,
+    fontSize: 12,
+    lineHeight: 18,
+  },
   hero: { backgroundColor: colors.white, alignItems: "center", paddingHorizontal: 20, paddingTop: 26, paddingBottom: 22 },
   heroDesktop: { maxWidth: 820, width: "100%", alignSelf: "center", flexDirection: "row", textAlign: "left", paddingVertical: 34 },
   portraitWrap: { position: "relative" },

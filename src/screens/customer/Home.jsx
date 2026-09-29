@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, FlatList, Image, ImageBackground, Pressable, RefreshControl, ScrollView, TextInput, useWindowDimensions } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Search, SlidersHorizontal, ArrowRight, Clock3, ShieldCheck, UserRoundPlus, UsersRound, FileText } from "lucide-react-native";
-import { colors, radii, spacing, font } from "../../lib/theme";
+import { colors, radii, font } from "../../lib/theme";
 import api, { API_URL } from "../../lib/api";
 import { spiritualTap } from "../../lib/spiritualSounds";
 import { fetchMarketplacePoojas } from "../../lib/marketplace";
@@ -25,7 +24,8 @@ const categories = ["All", "Home", "Festival", "Shanti", "Family"];
 export default function Home({ navigation }) {
   const { width } = useWindowDimensions();
   const desktop = width >= 900;
-  const columns = desktop ? 3 : width >= 360 ? 2 : 1;
+  const isTablet = width >= 600 && width < 900;
+  const columns = desktop ? 3 : isTablet ? 2 : 1;
   const { area } = usePreferences();
   const [poojas, setPoojas] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -65,7 +65,7 @@ export default function Home({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.root} edges={["top"]}>
+    <View style={styles.root}>
       <FlatList
         data={filtered}
         key={`${columns}-column-grid`}
@@ -101,27 +101,63 @@ export default function Home({ navigation }) {
           </ScrollView>
           <View style={[styles.sectionRow, styles.popularHeading]}>
             <Text style={styles.sectionTitle}>Popular poojas</Text>
-            <Text style={styles.sectionMeta}>{filtered.length} services</Text>
+            <Text style={styles.sectionMeta}>{filtered.length} ceremonies available</Text>
           </View>
         </>}
         renderItem={({ item }) => {
           const imageSource = item.localImage || (item.image_url ? { uri: item.image_url.startsWith("http") ? item.image_url : `${API_URL}${item.image_url}` } : require("../../../assets/images/ritual-kalasha.webp"));
-          return <Pressable testID={`pooja-card-${item.slug}`} style={({ pressed }) => [styles.card, columns > 1 && styles.cardGrid, desktop && styles.cardDesktop, pressed && styles.cardPressed]} onPress={() => openPooja(item)}>
-            <View style={[styles.imageFrame, desktop && styles.imageFrameDesktop]}><Image source={imageSource} style={styles.image} resizeMode="cover" /></View>
-            <View style={styles.cardBody}>
-              <View style={styles.cardHeading}><Text numberOfLines={2} style={styles.name}>{item.name}</Text></View>
-              <View style={styles.cardMeta}><Clock3 size={13} color={colors.muted2} /><Text style={styles.metaText}>{item.duration_hours} hr</Text></View>
-              <View style={styles.priceRow}><Text style={styles.price}>From ₹{Number(item.base_price).toLocaleString("en-IN")}</Text><ArrowRight size={15} color={colors.ink} /></View>
+          return (
+            <Pressable testID={`pooja-card-${item.slug}`} style={({ pressed }) => [styles.card, columns > 1 && styles.cardGrid, pressed && styles.cardPressed]} onPress={() => openPooja(item)}>
+              <View style={styles.cardHeaderRow}>
+                <View style={styles.imageFrame}>
+                  <Image source={imageSource} style={styles.image} resizeMode="cover" />
+                  <View style={styles.durationBadge}>
+                    <Clock3 size={10} color={colors.ink} />
+                    <Text style={styles.durationText}>{item.duration_hours} hr</Text>
+                  </View>
+                </View>
+                <View style={styles.cardInfo}>
+                  <View style={styles.categoryRow}>
+                    <Text style={styles.categoryBadgeText}>{item.category || "Ceremony"}</Text>
+                  </View>
+                  <Text numberOfLines={2} style={styles.name}>{item.name}</Text>
+                  <View style={styles.priceContainer}>
+                    <Text style={styles.pricePrefix}>Starting from </Text>
+                    <Text style={styles.priceAmount}>₹{Number(item.base_price).toLocaleString("en-IN")}</Text>
+                  </View>
+                </View>
+              </View>
+
               <View style={styles.cardActions}>
-                <Pressable testID={`view-profiles-${item.slug}`} onPress={(event) => { event.stopPropagation?.(); spiritualTap(); navigation.navigate("PriestList", { poojaSlug: item.slug, poojaName: item.name }); }} style={({ pressed }) => [styles.cardAction, pressed && styles.controlPressed]}>
-                  <UsersRound size={14} color={colors.ink} /><Text style={styles.cardActionText}>Profiles</Text>
+                <Pressable
+                  testID={`view-profiles-${item.slug}`}
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    spiritualTap();
+                    navigation.navigate("PriestList", { poojaSlug: item.slug, poojaName: item.name });
+                  }}
+                  style={({ pressed }) => [styles.cardActionSecondary, pressed && styles.controlPressed]}
+                >
+                  <UsersRound size={14} color={colors.ink} />
+                  <Text style={styles.cardActionSecondaryText}>View Purohits</Text>
                 </Pressable>
-                <Pressable testID={`request-proposals-${item.slug}`} onPress={(event) => { event.stopPropagation?.(); spiritualTap(); navigation.navigate("RequestPooja", { poojaSlug: item.slug, poojaName: item.name }); }} style={({ pressed }) => [styles.cardAction, styles.cardActionDark, pressed && styles.controlPressed]}>
-                  <FileText size={14} color={colors.white} /><Text style={styles.cardActionDarkText}>Proposals</Text>
+
+                <Pressable
+                  testID={`request-proposals-${item.slug}`}
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    spiritualTap();
+                    navigation.navigate("RequestPooja", { poojaSlug: item.slug, poojaName: item.name });
+                  }}
+                  style={({ pressed }) => [styles.cardActionPrimary, pressed && styles.controlPressed]}
+                >
+                  <FileText size={14} color={colors.white} />
+                  <Text style={styles.cardActionPrimaryText}>Get Proposals</Text>
+                  <ArrowRight size={13} color={colors.white} />
                 </Pressable>
               </View>
-            </View>
-          </Pressable>;
+            </Pressable>
+          );
         }}
         ListFooterComponent={<View>
           <Pressable style={({ pressed }) => [styles.hero, desktop && styles.heroDesktop, pressed && styles.panelPressed]} onPress={() => navigation.navigate("RequestPooja")}>
@@ -137,16 +173,16 @@ export default function Home({ navigation }) {
         </View>}
         ListEmptyComponent={<View style={styles.empty}><Text style={styles.emptyText}>No poojas match your search.</Text></View>}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.white },
-  content: { width: "100%", maxWidth: 1180, alignSelf: "center", paddingHorizontal: spacing.lg, paddingBottom: 44 },
+  content: { width: "100%", maxWidth: 1180, alignSelf: "center", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 110 },
   contentDesktop: { paddingHorizontal: 32 },
-  topbar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 20, marginBottom: 16 },
-  topbarDesktop: { paddingTop: 32, marginBottom: 20 },
+  topbar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 10, marginBottom: 16 },
+  topbarDesktop: { paddingTop: 20, marginBottom: 20 },
   eyebrow: { fontSize: 10, fontWeight: "700", color: colors.saffron, letterSpacing: .5 },
   heading: { maxWidth: "98%", fontSize: 27, lineHeight: 34, fontFamily: font.semibold, color: colors.ink, marginTop: 4 },
   headingSub: { maxWidth: 470, color: colors.muted2, fontSize: 11, lineHeight: 17, marginTop: 6 },
@@ -158,34 +194,29 @@ const styles = StyleSheet.create({
   heroArtwork: { width: "100%", height: "100%", justifyContent: "center" },
   heroArtworkImage: { resizeMode: "cover", borderRadius: radii.xl },
   heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(10,10,10,.16)" },
-  heroCopy: { width: "62%", padding: 20, justifyContent: "center" },
-  heroCopyDesktop: { width: "48%", padding: 32 },
-  heroTag: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6 },
-  heroTagText: { color: "#CFCFCF", fontWeight: "700", fontSize: 9, letterSpacing: .6 },
-  heroTitle: { color: colors.white, fontWeight: "700", fontSize: 19, lineHeight: 23, marginTop: 10 },
-  heroTitleDesktop: { fontSize: 34, lineHeight: 40 },
-  heroBody: { color: "#C7C7C7", fontSize: 10, lineHeight: 14, marginTop: 5 },
-  heroBodyDesktop: { fontSize: 14, lineHeight: 20, marginTop: 8 },
-  heroAction: { height: 36, marginTop: 12, paddingHorizontal: 12, borderRadius: 18, backgroundColor: colors.saffron, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 8, borderBottomWidth: 3, borderBottomColor: colors.saffronDark, shadowColor: "#000", shadowOpacity: .22, shadowRadius: 6, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
-  heroActionText: { color: colors.white, fontSize: 12, fontWeight: "700" },
-  searchBox: { height: 54, borderRadius: 27, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 17, shadowColor: "#000", shadowOpacity: .07, shadowRadius: 12, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
-  searchInput: { flex: 1, fontSize: font.sizes.base, color: colors.ink, paddingVertical: 0 },
-  aiPanel: { marginTop: 12, minHeight: 76, padding: 14, borderRadius: radii.lg, backgroundColor: "#FFF1EB", flexDirection: "row", alignItems: "center", gap: 12, borderBottomWidth: 3, borderBottomColor: "#E7C8BB", shadowColor: "#9B3A18", shadowOpacity: .08, shadowRadius: 7, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  aiMark: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.saffron, alignItems: "center", justifyContent: "center" },
-  om: { color: colors.white, fontSize: 24 },
-  aiEyebrow: { color: colors.saffronDark, fontSize: 9, fontWeight: "700" },
-  aiTitle: { color: colors.ink, fontSize: 15, fontWeight: "700", marginTop: 2 },
-  aiBody: { color: colors.muted2, fontSize: 11, marginTop: 3 },
-  requestPanel: { marginTop: 10, minHeight: 72, padding: 13, borderRadius: radii.lg, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.warmBorder, borderBottomWidth: 3, borderBottomColor: "#D8D5CF", flexDirection: "row", alignItems: "center", gap: 11, shadowColor: "#000", shadowOpacity: .06, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+  heroCopy: { paddingHorizontal: 16, paddingVertical: 14, justifyContent: "center" },
+  heroCopyDesktop: { paddingHorizontal: 26, paddingVertical: 20 },
+  heroTagText: { color: colors.saffron, fontSize: 9, fontWeight: "800", letterSpacing: 1.1 },
+  heroTitle: { color: colors.white, fontSize: 17, lineHeight: 22, fontWeight: "800", marginTop: 4, maxWidth: "86%" },
+  heroTitleDesktop: { fontSize: 23, lineHeight: 28 },
+  heroBody: { color: "#F0EAE1", fontSize: 11, lineHeight: 15, marginTop: 4, maxWidth: "92%" },
+  heroBodyDesktop: { fontSize: 12, lineHeight: 18, maxWidth: "70%" },
+  heroAction: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.saffron, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, marginTop: 10 },
+  heroActionText: { color: colors.white, fontSize: 11, fontWeight: "700" },
+  searchBox: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: colors.warmBorder, borderRadius: radii.pill, paddingHorizontal: 16, height: 50, backgroundColor: colors.white, marginTop: 16 },
+  searchInput: { flex: 1, color: colors.ink, fontSize: 13, height: "100%" },
+  om: { fontSize: 20, color: colors.saffron, fontWeight: "700" },
+  aiMark: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: colors.muted },
+  aiEyebrow: { color: colors.saffron, fontSize: 9, fontWeight: "800", letterSpacing: 1.1 },
+  aiTitle: { color: colors.ink, fontSize: 13, fontWeight: "700", marginTop: 1 },
+  aiBody: { color: colors.muted2, fontSize: 11, marginTop: 1 },
   requestBadge: { alignSelf: "center", backgroundColor: colors.brandBrown, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 12 },
   requestBadgeText: { color: colors.white, fontSize: 8, fontWeight: "700", letterSpacing: .5 },
-  requestTitle: { color: colors.ink, fontSize: 14, fontWeight: "700", lineHeight: 18 },
-  requestBody: { color: colors.muted2, fontSize: 10, lineHeight: 14, marginTop: 3 },
   priestInvite: { marginTop: 6, minHeight: 68, paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 11, backgroundColor: colors.white },
   priestInviteIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: colors.muted },
   priestInviteTitle: { fontSize: 13, fontWeight: "700", color: colors.ink },
   priestInviteBody: { fontSize: 10, lineHeight: 14, color: colors.muted2, marginTop: 2 },
-  sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginTop: 30 },
+  sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginTop: 26 },
   popularHeading: { marginTop: 8, marginBottom: 14 },
   sectionTitle: { fontSize: 23, color: colors.ink, fontWeight: "700" },
   sectionMeta: { fontSize: 11, color: colors.muted2 },
@@ -197,25 +228,96 @@ const styles = StyleSheet.create({
   serviceLinks: { marginTop: 16, borderTopWidth: 1, borderColor: colors.warmBorder },
   serviceLink: { minHeight: 78, flexDirection: "row", alignItems: "center", gap: 12, borderBottomWidth: 1, borderColor: colors.warmBorder, paddingVertical: 12 },
   gridRow: { gap: 14, alignItems: "flex-start" },
-  card: { width: "100%", overflow: "hidden", backgroundColor: colors.white, marginBottom: 24 },
-  cardGrid: { flex: 1, width: "auto", maxWidth: "49%" },
-  cardDesktop: { maxWidth: "32.5%" },
-  cardPressed: { opacity: .9, transform: [{ translateY: 2 }, { scale: .985 }] },
-  imageFrame: { width: "100%", aspectRatio: 1.25, maxHeight: 150, overflow: "hidden", borderRadius: radii.md, backgroundColor: colors.muted },
-  imageFrameDesktop: { aspectRatio: 1.42, maxHeight: 210 },
+  card: {
+    width: "100%",
+    backgroundColor: colors.white,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: "#EBE7DF",
+    padding: 13,
+    marginBottom: 13,
+    shadowColor: "#2D2013",
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  cardGrid: { flex: 1, width: "auto" },
+  cardPressed: { opacity: 0.94, transform: [{ translateY: 2 }, { scale: 0.99 }] },
+  cardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 13,
+  },
+  imageFrame: {
+    width: 90,
+    height: 90,
+    borderRadius: radii.lg,
+    overflow: "hidden",
+    backgroundColor: colors.muted,
+    position: "relative",
+  },
   image: { width: "100%", height: "100%" },
-  cardBody: { paddingTop: 11, paddingHorizontal: 2 },
-  cardHeading: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
-  name: { flex: 1, fontSize: 14, lineHeight: 19, color: colors.ink, fontWeight: "700" },
-  cardMeta: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 5 },
-  metaText: { fontSize: 11, color: colors.muted2 },
-  priceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
-  price: { color: colors.ink, fontWeight: "700", fontSize: 12 },
-  cardActions: { flexDirection: "row", gap: 6, marginTop: 11 },
-  cardAction: { flex: 1, height: 38, borderRadius: 19, borderWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.white },
-  cardActionDark: { backgroundColor: colors.brandBrown, borderColor: colors.brandBrown, borderBottomWidth: 3, borderBottomColor: colors.brandBrownDark },
-  cardActionText: { color: colors.ink, fontSize: 10, fontWeight: "700" },
-  cardActionDarkText: { color: colors.white, fontSize: 10, fontWeight: "700" },
+  durationBadge: {
+    position: "absolute",
+    bottom: 5,
+    left: 5,
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  durationText: { fontSize: 9, fontWeight: "700", color: colors.ink },
+  cardInfo: { flex: 1, justifyContent: "center" },
+  categoryRow: { flexDirection: "row", alignItems: "center", marginBottom: 3 },
+  categoryBadgeText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: colors.saffron,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  name: { fontSize: 16, lineHeight: 21, color: colors.ink, fontWeight: "700" },
+  priceContainer: { flexDirection: "row", alignItems: "baseline", marginTop: 5 },
+  pricePrefix: { fontSize: 11, color: colors.muted2, fontWeight: "500" },
+  priceAmount: { fontSize: 14, fontWeight: "800", color: colors.ink },
+  cardActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 11,
+    borderTopWidth: 1,
+    borderTopColor: "#F4F1EC",
+  },
+  cardActionSecondary: {
+    flex: 1,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: "#E2DDD5",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#FBF9F5",
+    paddingHorizontal: 8,
+  },
+  cardActionSecondaryText: { color: colors.ink, fontSize: 12, fontWeight: "700" },
+  cardActionPrimary: {
+    flex: 1.15,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.brandBrown,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+  cardActionPrimaryText: { color: colors.white, fontSize: 12, fontWeight: "700" },
   trustRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, paddingVertical: 18, borderTopWidth: 1, borderColor: colors.warmBorder },
   trustText: { flex: 1, fontSize: 11, color: colors.muted2 },
   empty: { paddingVertical: 40 },

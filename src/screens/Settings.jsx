@@ -101,18 +101,41 @@ function SupportSettings({ navigation }) {
 
 function LanguageSettings() {
   const { language, setLanguage } = usePreferences();
-  return <><Text style={styles.lede}>Choose the language used across booking and priest workspaces.</Text><View style={styles.list}>{[["en", "English", "English"], ["kn", "Kannada", "ಕನ್ನಡ"]].map(([value, title, native]) => <Pressable key={value} onPress={() => setLanguage(value)} style={({ pressed }) => [styles.row, pressed && styles.pressed]}><View style={styles.rowIcon}><Globe2 size={17} color={colors.ink} /></View><View style={{ flex: 1 }}><Text style={styles.rowTitle}>{title}</Text><Text style={styles.rowBody}>{native}</Text></View>{language === value ? <Check size={19} color={colors.brandOrangeDark} /> : null}</Pressable>)}</View></>;
+  return (
+    <>
+      <Text style={styles.lede}>Choose the language used across booking and priest workspaces.</Text>
+      <View style={styles.list}>
+        {[["en", "English", "English"], ["kn", "Kannada", "ಕನ್ನಡ"]].map(([value, title, native]) => (
+          <Pressable key={value} onPress={() => setLanguage(value)} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+            <View style={styles.rowIcon}><Globe2 size={18} color={colors.ink} /></View>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.rowTitleText}>{title}</Text>
+              <Text style={styles.rowBodyText}>{native}</Text>
+            </View>
+            {language === value ? <Check size={20} color={colors.brandOrangeDark} /> : null}
+          </Pressable>
+        ))}
+      </View>
+    </>
+  );
 }
 
 function ActionButton({ icon: Icon, title, onPress, loading, secondary }) { return <Pressable disabled={loading} onPress={onPress} style={({ pressed }) => [styles.actionButton, secondary && styles.actionButtonSecondary, pressed && styles.pressed]}>{loading ? <ActivityIndicator color={secondary ? colors.brandBrown : colors.white} /> : <Icon size={17} color={secondary ? colors.brandBrown : colors.white} />}<Text style={[styles.actionText, secondary && styles.actionTextSecondary]}>{title}</Text></Pressable>; }
-function InfoRow({ icon: Icon, title, body }) { return <View style={styles.infoRow}><View style={styles.rowIcon}><Icon size={17} color={colors.ink} /></View><View style={{ flex: 1 }}><Text style={styles.rowTitle}>{title}</Text><Text style={styles.rowBody}>{body}</Text></View></View>; }
+function InfoRow({ icon: Icon, title, body }) { return <View style={styles.infoRow}><View style={styles.rowIcon}><Icon size={17} color={colors.ink} /></View><View style={styles.rowTextCol}><Text style={styles.rowTitleText}>{title}</Text><Text style={styles.rowBodyText}>{body}</Text></View></View>; }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.white }, content: { width: "100%", maxWidth: 760, alignSelf: "center", padding: 22, paddingBottom: 64 },
   eyebrow: { color: colors.brandOrangeDark, fontFamily: font.bold, fontSize: 10, letterSpacing: .7 }, title: { color: colors.ink, fontFamily: font.bold, fontSize: 30, lineHeight: 37, marginTop: 7, marginBottom: 20 }, lede: { color: colors.muted2, fontSize: 13, lineHeight: 20, marginBottom: 18 },
   summary: { minHeight: 116, borderRadius: 14, padding: 17, backgroundColor: colors.brandBrown, flexDirection: "row", alignItems: "center", gap: 13 }, summaryIcon: { width: 46, height: 46, borderRadius: 12, backgroundColor: colors.brandOrange, alignItems: "center", justifyContent: "center" }, summaryLabel: { color: "#F1CDD4", fontFamily: font.bold, fontSize: 9, letterSpacing: .5 }, summaryTitle: { color: colors.white, fontFamily: font.bold, fontSize: 17, marginTop: 4 }, summaryBody: { color: "#F4DCE1", fontSize: 10, lineHeight: 15, marginTop: 4 },
   actionPair: { flexDirection: "row", gap: 10, marginTop: 12 }, actionButton: { flex: 1, minHeight: 48, borderRadius: 10, backgroundColor: colors.brandOrangeDark, borderBottomWidth: 3, borderBottomColor: "#A83C08", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }, actionButtonSecondary: { backgroundColor: colors.white, borderWidth: 1, borderColor: "#D9ADB6", borderBottomWidth: 3, borderBottomColor: "#D9ADB6" }, actionText: { color: colors.white, fontFamily: font.bold, fontSize: 12 }, actionTextSecondary: { color: colors.brandBrown },
-  sectionTitle: { color: colors.ink, fontFamily: font.bold, fontSize: 18, marginTop: 28, marginBottom: 10 }, list: { borderTopWidth: 1, borderColor: colors.warmBorder }, row: { minHeight: 64, borderBottomWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 12 }, rowIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }, rowTitle: { flex: 1, color: colors.ink, fontFamily: font.semibold, fontSize: 13 }, rowBody: { color: colors.muted2, fontSize: 10, lineHeight: 15, marginTop: 3 },
+  sectionTitle: { color: colors.ink, fontFamily: font.bold, fontSize: 18, marginTop: 28, marginBottom: 10 }, list: { borderTopWidth: 1, borderColor: colors.warmBorder },
+  row: { minHeight: 64, borderBottomWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 12 },
+  rowIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" },
+  rowTextCol: { flex: 1, justifyContent: "center" },
+  rowTitleText: { color: colors.ink, fontFamily: font.semibold, fontSize: 14, lineHeight: 19 },
+  rowBodyText: { color: colors.muted2, fontSize: 11, lineHeight: 16, marginTop: 2 },
+  rowTitle: { color: colors.ink, fontFamily: font.semibold, fontSize: 13 },
+  rowBody: { color: colors.muted2, fontSize: 10, lineHeight: 15, marginTop: 3 },
   infoRow: { minHeight: 76, borderBottomWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 12 }, error: { color: colors.brandBrown, fontSize: 11, marginTop: 10 }, pressed: { opacity: .76, transform: [{ translateY: 1 }] },
   deviceCard: { minHeight: 112, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 14 }, deviceIcon: { width: 52, height: 52, borderRadius: 12, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }, currentRow: { flexDirection: "row", alignItems: "center", gap: 8 }, deviceTitle: { color: colors.ink, fontFamily: font.bold, fontSize: 15 }, current: { color: colors.success, fontFamily: font.bold, fontSize: 8 }, deviceBody: { color: colors.muted2, fontSize: 11, marginTop: 5 }, deviceMeta: { color: colors.muted2, fontSize: 9, marginTop: 5 }, dangerButton: { minHeight: 54, marginTop: 22, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 10 }, dangerText: { color: colors.brandBrown, fontFamily: font.semibold, fontSize: 13 },
   contactGrid: { flexDirection: "row", gap: 10 }, contactCard: { flex: 1, minHeight: 128, borderWidth: 1, borderColor: colors.warmBorder, borderRadius: 12, padding: 15, justifyContent: "center" }, contactTitle: { color: colors.ink, fontFamily: font.bold, fontSize: 13, marginTop: 12 }, contactBody: { color: colors.muted2, fontSize: 10, lineHeight: 15, marginTop: 4 }, faq: { borderBottomWidth: 1, borderColor: colors.warmBorder, paddingVertical: 15 }, faqHead: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 10 }, faqBody: { color: colors.muted2, fontSize: 11, lineHeight: 18, paddingLeft: 28, paddingTop: 8 },

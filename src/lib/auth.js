@@ -141,6 +141,42 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
+  const updateProfile = useCallback(async ({ name, phone } = {}) => {
+    if (!user?.id) return null;
+    const cleanPhone = phone !== undefined ? String(phone).replace(/\D/g, "").slice(-10) : undefined;
+    const cleanName = name !== undefined ? String(name).trim() : undefined;
+    const nextName = cleanName !== undefined && cleanName !== "" ? cleanName : user.name;
+    const nextPhone = cleanPhone !== undefined ? cleanPhone : user.phone;
+
+    if (supabase) {
+      const updates = {
+        updated_at: new Date().toISOString(),
+      };
+      if (cleanName !== undefined && cleanName !== "") updates.full_name = cleanName;
+      if (cleanPhone !== undefined) updates.phone = cleanPhone;
+
+      const { error } = await supabase.from("app_users").update(updates).eq("id", user.id);
+      if (error) {
+        console.warn("Failed to update user profile in app_users:", error.message);
+      }
+      const meta = {};
+      if (cleanName) meta.full_name = cleanName;
+      if (cleanPhone) meta.phone = cleanPhone;
+      if (Object.keys(meta).length > 0) {
+        await supabase.auth.updateUser({ data: meta }).catch(() => {});
+      }
+    }
+
+    const nextUser = {
+      ...user,
+      name: nextName,
+      phone: nextPhone,
+    };
+    setUser(nextUser);
+    await tokens.setUser(nextUser).catch(() => {});
+    return nextUser;
+  }, [user]);
+
   const refreshMe = useCallback(async () => {
     try {
       const { data } = await api.get("/auth/me");
@@ -220,7 +256,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthCtx.Provider value={{
       ready, user, role,
-      setRole, resetRole, login, logout, completeOnboarding, refreshMe, restoreWithBiometric, applySupabaseSession,
+      setRole, resetRole, login, logout, completeOnboarding, updateProfile, refreshMe, restoreWithBiometric, applySupabaseSession,
     }}>
       {children}
     </AuthCtx.Provider>

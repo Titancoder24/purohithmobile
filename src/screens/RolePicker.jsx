@@ -7,12 +7,15 @@ import { useAuth } from "../lib/auth";
 import { spiritualTap } from "../lib/spiritualSounds";
 import BrandLogo from "../components/BrandLogo";
 
-export default function RolePicker({ navigation }) {
+export default function RolePicker() {
   const { width } = useWindowDimensions();
   const desktop = width >= 900;
   const { t } = useI18n();
   const { setRole } = useAuth();
-  const pick = async (role) => { spiritualTap(); await setRole(role); navigation.replace("Login"); };
+  const pick = async (role) => {
+    spiritualTap();
+    await setRole(role);
+  };
 
   const controls = <View style={styles.controls}>
     <View style={styles.chooseRow}><Text style={styles.choose}>{t.chooseRole}</Text><Text style={styles.step}>1 of 2</Text></View>

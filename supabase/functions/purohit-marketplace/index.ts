@@ -17,12 +17,27 @@ Deno.serve(async (req) => {
     });
 
     if (body.kind === "poojas") {
-      const { data, error } = await supabase.from("poojas")
-        .select("id,slug,name,description,duration_minutes,base_price_inr,image_url,is_active")
-        .eq("is_active", true)
-        .order("base_price_inr", { ascending: true });
+      const [{ data, error }, { data: feeSetting }] = await Promise.all([
+        supabase.from("poojas")
+          .select("id,slug,name,description,duration_minutes,base_price_inr,image_url,is_active")
+          .eq("is_active", true)
+          .order("base_price_inr", { ascending: true }),
+        supabase.from("platform_settings")
+          .select("value")
+          .eq("key", "payment_service_fee_percent")
+          .maybeSingle(),
+      ]);
       if (error) throw error;
-      return json({ poojas: data || [] });
+      const serviceFeePercent = Number(feeSetting?.value || 10);
+      return json({ poojas: data || [], service_fee_percent: serviceFeePercent });
+    }
+
+    if (body.kind === "settings") {
+      const { data: feeSetting } = await supabase.from("platform_settings")
+        .select("value")
+        .eq("key", "payment_service_fee_percent")
+        .maybeSingle();
+      return json({ service_fee_percent: Number(feeSetting?.value || 10) });
     }
 
     if (body.kind === "profile") {

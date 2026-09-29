@@ -3,7 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { Clock3, LocateFixed, Navigation, ShieldCheck } from "lucide-react-native";
 import { colors, radii } from "../../lib/theme";
 import { Button } from "../../components/UI";
-import OpenStreetMap from "../../components/OpenStreetMap";
+import MapplsMap from "../../components/MapplsMap";
 import MapplsDrawer from "../../components/MapplsDrawer";
 import { usePreferences } from "../../lib/preferences";
 import { getBookingLocation, setTrackingConsent } from "../../lib/payments";
@@ -62,7 +62,7 @@ export default function TrackPriest({ route }) {
     <Text style={styles.title}>Track your purohit</Text>
     <Text style={styles.subtitle}>{booking?.pooja_name} · {booking?.priest_name}</Text>
 
-    <Pressable onPress={() => setMapOpen(true)} style={styles.mapWrap}><OpenStreetMap latitude={latitude} longitude={longitude} title="Live priest location" address={booking?.address || area.name} /><View style={styles.mapBadge}><Navigation size={14} color={colors.ink} /><Text style={styles.mapBadgeText}>{location ? "Live priest location" : area.name}</Text></View></Pressable>
+    <Pressable onPress={() => setMapOpen(true)} style={styles.mapWrap}><MapplsMap latitude={latitude} longitude={longitude} title="Live priest location" address={booking?.address || area.name} /><View style={styles.mapBadge}><Navigation size={14} color={colors.ink} /><Text style={styles.mapBadgeText}>{location ? "Live priest location" : area.name}</Text></View></Pressable>
 
     <View style={styles.statusCard}>
       <View style={styles.statusIcon}><LocateFixed size={20} color={trackingStatus === "active" ? colors.success : colors.muted2} /></View>

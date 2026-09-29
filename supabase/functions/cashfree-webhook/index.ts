@@ -132,7 +132,10 @@ async function markPaid(supabase: any, order: any, now: string) {
     await supabase.from("ceremony_requests").update({ payment_status: "paid", status: "awarded", updated_at: now }).eq("id", order.request_id);
   }
 
-  const platformFee = Math.round(Number(order.amount_paise) * 0.1);
+  const feePercent = Number(order.metadata?.fee_breakdown?.service_fee_percent) || (await getPlatformServiceFeePercent(supabase));
+  const platformFee = typeof order.metadata?.fee_breakdown?.platform_fee_paise === "number"
+    ? order.metadata.fee_breakdown.platform_fee_paise
+    : Math.round(Number(order.amount_paise) * (feePercent / 100));
   await supabase.from("provider_earnings").upsert({
     booking_id: booking.id,
     payment_order_id: order.id,
@@ -275,6 +278,21 @@ function renderInvoice(invoiceNumber: string, booking: any, order: any) {
 
 function makeInvoiceNumber() {
   return `PC-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+}
+
+async function getPlatformServiceFeePercent(supabase: any): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from("platform_settings")
+      .select("value")
+      .eq("key", "payment_service_fee_percent")
+      .maybeSingle();
+    if (error || !data?.value) return 10;
+    const parsed = Number(data.value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 10;
+  } catch {
+    return 10;
+  }
 }
 
 function getSupabaseSecretKey() {

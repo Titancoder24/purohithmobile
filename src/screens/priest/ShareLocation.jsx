@@ -4,7 +4,7 @@ import * as Location from "expo-location";
 import { LocateFixed, Navigation, ShieldCheck, Square } from "lucide-react-native";
 import { colors, radii, spacing } from "../../lib/theme";
 import { Button } from "../../components/UI";
-import OpenStreetMap from "../../components/OpenStreetMap";
+import MapplsMap from "../../components/MapplsMap";
 import MapplsDrawer from "../../components/MapplsDrawer";
 import { pushBookingLocation, setTrackingConsent } from "../../lib/payments";
 
@@ -44,7 +44,7 @@ export default function ShareLocation({ route, navigation }) {
   return <View style={styles.root}>
     <View style={styles.body}>
       <Text style={styles.eyebrow}>TRIP TO BOOKING</Text><Text style={styles.title}>Share arrival location</Text><Text style={styles.subtitle}>{booking?.customer_name} · {booking?.pooja_name}</Text>
-      <Pressable onPress={() => setMapOpen(true)} style={styles.map}><OpenStreetMap latitude={latitude} longitude={longitude} title="Your live location" address={booking?.address} /></Pressable>
+      <Pressable onPress={() => setMapOpen(true)} style={styles.map}><MapplsMap latitude={latitude} longitude={longitude} title="Your live location" address={booking?.address} /></Pressable>
       <View style={styles.status}><Navigation size={19} color={active ? colors.success : colors.muted2} /><View style={{ flex: 1 }}><Text style={styles.statusTitle}>{active ? "Sharing live location" : "Not sharing yet"}</Text><Text style={styles.statusText}>{message}</Text></View></View>
       <View style={styles.privacy}><ShieldCheck size={17} color={colors.success} /><Text style={styles.privacyText}>Sharing is limited to this customer and stops when you end it or complete the booking.</Text></View>
     </View>

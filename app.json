@@ -36,10 +36,13 @@
       },
       "package": "com.purohithconnect.app",
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -79,10 +82,10 @@
     "extra": {
       "apiUrl": "https://pooja-marketplace-3.preview.emergentagent.com",
       "supabaseUrl": "https://fvvmfrbfqwdypkagtdce.supabase.co",
-      "supabaseAnonKey": "",
-      "mapplsAccessToken": "",
+      "supabaseAnonKey": "sb_publishable_sEbAdNoOCjP5Vs3DV9Y6SA_DDkZMGfy",
+      "mapplsAccessToken": "245e028d27385d25b6fedb57230896ee",
       "eas": {
-        "projectId": "PLACEHOLDER-EAS-PROJECT-ID"
+        "projectId": "c1c78fd6-b7a2-46b6-b394-ec30f16d22b1"
       }
     }
   }

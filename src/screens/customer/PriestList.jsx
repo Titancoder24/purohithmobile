@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, FlatList, Pressable, Image, ScrollView, TextInput, useWindowDimensions } from "react-native";
-import { MapPin, Languages, ShieldCheck, ArrowRight, SlidersHorizontal, BadgeCheck, Search, Check, X } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { MapPin, Languages, ShieldCheck, ArrowLeft, ArrowRight, SlidersHorizontal, BadgeCheck, Search, Check, X } from "lucide-react-native";
 import { colors, font } from "../../lib/theme";
 import api, { API_URL } from "../../lib/api";
 import { fetchMarketplacePriests } from "../../lib/marketplace";
-import BrandLogo from "../../components/BrandLogo";
 
 const POOJA_FILTERS = [
   ["all", "All Pujas"], ["gauri-ganesha-vratha", "Gauri Ganesha"], ["rudrabhishek", "Rudra Abhishek"],
@@ -22,6 +22,7 @@ const PRICE_BANDS = [
 ];
 
 export default function PriestList({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { poojaSlug, poojaName, area } = route.params || {};
   const desktop = width >= 980;
@@ -75,13 +76,44 @@ export default function PriestList({ route, navigation }) {
 
   return (
     <View style={styles.root}>
-      <View style={styles.marketHeader}>
-        <BrandLogo width={104} height={46} showText={false} style={styles.brandMark} />
-        <View style={styles.searchBox}><Search size={19} color={colors.muted2} /><TextInput value={query} onChangeText={setQuery} placeholder="Search priests, rituals, languages and areas" placeholderTextColor="#8B8B87" style={styles.searchInput} /></View>
-        <View style={styles.headerIcon}><SlidersHorizontal size={20} color={colors.ink} /></View>
+      <View style={[styles.marketHeader, { paddingTop: Math.max(insets.top, 12) + 4 }]}>
+        <Pressable
+          testID="priest-list-back"
+          accessibilityLabel="Back"
+          hitSlop={16}
+          onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate("Tabs", { screen: "Home" });
+            }
+          }}
+          style={({ pressed }) => [styles.backBtn, pressed && styles.controlPressed]}
+        >
+          <ArrowLeft size={20} color={colors.ink} />
+        </Pressable>
+        <View style={styles.searchBox}>
+          <Search size={18} color={colors.muted2} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search priests, rituals, languages..."
+            placeholderTextColor="#8B8B87"
+            style={styles.searchInput}
+          />
+        </View>
+        <View style={styles.headerIcon}>
+          <SlidersHorizontal size={19} color={colors.ink} />
+        </View>
       </View>
 
-      <View style={styles.breadcrumb}><Text style={styles.crumb}>Home / Purohits / </Text><Text style={styles.crumbStrong}>{poojaName || labelForCategory(category)}</Text></View>
+      <View style={styles.breadcrumb}>
+        <Pressable hitSlop={10} onPress={() => navigation.navigate("Tabs", { screen: "Home" })}>
+          <Text style={[styles.crumb, { fontWeight: "700", color: colors.saffron }]}>Home</Text>
+        </Pressable>
+        <Text style={styles.crumb}> / Purohits / </Text>
+        <Text style={styles.crumbStrong}>{poojaName || labelForCategory(category)}</Text>
+      </View>
       <View style={styles.titleRow}><Text style={styles.title}>{poojaName || "Purohit marketplace"} <Text style={styles.itemCount}>- {filtered.length} profiles</Text></Text>{desktop ? <Text style={styles.sortBox}>Sort by: Recommended</Text> : null}</View>
 
       <View style={styles.shell}>
@@ -178,11 +210,13 @@ function labelForCategory(value) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.white },
-  marketHeader: { minHeight: 74, paddingHorizontal: 20, borderBottomWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 18 },
+  marketHeader: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 10 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: colors.warmBorder, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
+  controlPressed: { opacity: 0.7, transform: [{ translateY: 1 }] },
   brandMark: { width: 104, height: 46, alignItems: "center", justifyContent: "center" },
-  searchBox: { flex: 1, maxWidth: 760, height: 50, borderRadius: 6, backgroundColor: colors.muted, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 16 },
-  searchInput: { flex: 1, color: colors.ink, fontSize: 15, paddingVertical: 0 },
-  headerIcon: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  searchBox: { flex: 1, height: 44, borderRadius: 22, backgroundColor: colors.muted, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14 },
+  searchInput: { flex: 1, color: colors.ink, fontSize: 14, paddingVertical: 0 },
+  headerIcon: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: colors.warmBorder, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
   breadcrumb: { paddingHorizontal: 20, paddingTop: 22, flexDirection: "row" },
   crumb: { color: colors.muted2, fontSize: 13 },
   crumbStrong: { color: colors.ink, fontSize: 13, fontWeight: "800" },

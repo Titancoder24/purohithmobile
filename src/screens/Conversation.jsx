@@ -1,10 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ArrowLeft, Phone, Send, ShieldCheck } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { colors, font, spacing } from "../lib/theme";
 import { useAuth } from "../lib/auth";
 import api from "../lib/api";
+import { startInAppCall } from "../lib/calls";
 
 const demoMessages = (isCustomer) => [{
   id: "welcome",
@@ -15,6 +17,7 @@ const demoMessages = (isCustomer) => [{
 }];
 
 export default function Conversation({ route }) {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { user } = useAuth();
   const routeBooking = route.params?.booking;
@@ -23,7 +26,6 @@ export default function Conversation({ route }) {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
-  const demoChannel = useRef(null);
   const isCustomer = user?.role === "customer";
   const otherName = isCustomer ? booking?.priest_name : booking?.customer_name;
 
@@ -42,40 +44,51 @@ export default function Conversation({ route }) {
 
   useEffect(() => {
     load();
-    if (booking?.demo || user?.demo) return undefined;
-    const timer = setInterval(load, 4000);
-    return () => clearInterval(timer);
-  }, [booking?.demo, load, user?.demo]);
-
-  useEffect(() => {
-    if (!(booking?.demo || user?.demo) || typeof globalThis.BroadcastChannel === "undefined") return undefined;
-    demoChannel.current = new BroadcastChannel(`purohith-chat-${booking?.id || "demo"}`);
-    demoChannel.current.onmessage = ({ data }) => {
-      if (data?.sender_role && data.sender_role !== user?.role) setMessages((current) => [...current, data]);
-    };
-    return () => { demoChannel.current?.close(); demoChannel.current = null; };
-  }, [booking?.demo, booking?.id, user?.demo, user?.role]);
+    if (!booking?.id || booking?.demo || user?.demo) return undefined;
+    const interval = setInterval(load, 4000);
+    return () => clearInterval(interval);
+  }, [booking?.demo, booking?.id, load, user?.demo]);
 
   const send = async () => {
-    const content = draft.trim();
-    if (!content || sending) return;
-    setDraft("");
-    const optimistic = { id: `local-${Date.now()}`, sender_role: user.role, sender_name: user.name, content, created_at: new Date().toISOString() };
-    setMessages((current) => [...current, optimistic]);
-    if (booking?.demo || user?.demo) { demoChannel.current?.postMessage(optimistic); return; }
+    const text = draft.trim();
+    if (!text || sending) return;
     setSending(true);
-    try { await api.post(`/bookings/${booking.id}/messages`, { content }); }
-    catch (error) { Alert.alert("Message not sent", error?.response?.data?.detail || "Please try again."); }
-    finally { setSending(false); }
+    try {
+      if (booking?.demo || user?.demo) {
+        const item = {
+          id: `demo-${Date.now()}`,
+          sender_role: user?.role || "customer",
+          sender_name: user?.name || (isCustomer ? "Customer" : "Purohit"),
+          content: text,
+          created_at: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, item]);
+        setDraft("");
+        return;
+      }
+      await api.post(`/bookings/${booking.id}/messages`, { content: text });
+      setDraft("");
+      load();
+    } catch (e) {
+      Alert.alert("Failed to send", e?.message || "Please try again");
+    } finally {
+      setSending(false);
+    }
   };
 
   const title = useMemo(() => otherName || (isCustomer ? "Your purohit" : "Customer"), [isCustomer, otherName]);
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={80}>
-      <View style={styles.header}>
-        <Pressable accessibilityLabel="Back to booking" onPress={() => navigation.goBack()} style={styles.iconBtn}><ArrowLeft size={20} color={colors.ink} /></Pressable>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 8 }]}>
+        <Pressable accessibilityLabel="Back to booking" onPress={() => navigation.goBack()} hitSlop={12} style={styles.iconBtn}><ArrowLeft size={20} color={colors.ink} /></Pressable>
         <View style={styles.identity}><View style={styles.avatar}><Text style={styles.avatarText}>{title.slice(0, 1)}</Text></View><View><Text style={styles.title}>{title}</Text><Text style={styles.subtitle}>{booking?.pooja_name || "Booking conversation"}</Text></View></View>
-        <Pressable accessibilityLabel="Start audio call" onPress={() => navigation.navigate("CallRoom", { bookingId })} style={styles.callBtn}><Phone size={18} color={colors.ink} /></Pressable>
+        <Pressable
+          accessibilityLabel="Start in-app call"
+          onPress={() => startInAppCall(navigation, { bookingId, booking })}
+          style={styles.callBtn}
+        >
+          <Phone size={18} color={colors.ink} />
+        </Pressable>
       </View>
       <View style={styles.safety}><ShieldCheck size={14} color={colors.success} /><Text style={styles.safetyText}>Private conversation for this booking</Text></View>
       <FlatList

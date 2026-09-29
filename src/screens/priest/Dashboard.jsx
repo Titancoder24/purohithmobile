@@ -7,10 +7,17 @@ import { colors } from "../../lib/theme";
 import { Button } from "../../components/UI";
 import { downloadInvoice, listBookings, listPaymentReports, updateProviderBooking } from "../../lib/payments";
 import { useAuth } from "../../lib/auth";
+import { startInAppCall } from "../../lib/calls";
 
-const DEMO_BOOKINGS = [
-  { id: "demo-request", status: "pending", pooja_name: "Griha Pravesh", customer_name: "Ananya Rao", customer_phone: "9000000101", booking_date: "2026-08-12", booking_time: "09:00", address: "Indiranagar, Bengaluru", total_amount: 5100 },
-  { id: "demo-confirmed", status: "confirmed", pooja_name: "Satyanarayan Pooja", customer_name: "Raghav Iyer", customer_phone: "9000000102", booking_date: "2026-08-10", booking_time: "07:30", address: "Jayanagar, Bengaluru", total_amount: 3100 },
+const futureDate = (days) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+const getDemoBookings = () => [
+  { id: "demo-request", status: "pending", pooja_name: "Griha Pravesh", customer_name: "Ananya Rao", customer_phone: "9000000101", booking_date: futureDate(1), booking_time: "09:00", address: "Indiranagar, Bengaluru", total_amount: 5100 },
+  { id: "demo-confirmed", status: "confirmed", pooja_name: "Satyanarayan Pooja", customer_name: "Raghav Iyer", customer_phone: "9000000102", booking_date: futureDate(3), booking_time: "07:30", address: "Jayanagar, Bengaluru", total_amount: 3100 },
 ];
 
 const toDate = (value) => new Date(`${value}T00:00:00`);
@@ -23,7 +30,7 @@ export default function PriestDashboard() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    if (user?.demo) return setItems(DEMO_BOOKINGS);
+    if (user?.demo) return setItems(getDemoBookings());
     try {
       const [{ bookings }, { reports }] = await Promise.all([listBookings(), listPaymentReports()]);
       const reportsByBooking = Object.fromEntries((reports || []).map((report) => [report.booking_id, report]));
@@ -81,7 +88,7 @@ function BookingRow({ booking, navigation, onAction }) {
   const date = toDate(booking.booking_date);
   return <View style={[styles.job, pending && styles.jobPending]}>
     <View style={styles.dateTile}><Text style={styles.month}>{date.toLocaleDateString("en-IN", { month: "short" }).toUpperCase()}</Text><Text style={styles.day}>{date.getDate()}</Text><Text style={styles.time}>{booking.booking_time}</Text></View>
-    <View style={styles.jobBody}><View style={styles.jobTop}><Text style={styles.jobTitle}>{booking.pooja_name}</Text><Text style={styles.status}>{pending ? "NEW REQUEST" : "SCHEDULED"}</Text></View><Text style={styles.customer}>{booking.customer_name}</Text><View style={styles.location}><MapPin size={12} color={colors.muted2} /><Text style={styles.locationText} numberOfLines={1}>{booking.address}</Text></View><Text style={styles.price}>₹{amount(booking).toLocaleString("en-IN")}</Text>{pending ? <View style={styles.pendingActions}><Button title="Accept" onPress={() => onAction(booking, "accept")} style={styles.accept} /><Button title="Decline" variant="danger" onPress={() => onAction(booking, "reject")} style={styles.decline} /></View> : null}{confirmed ? <View style={styles.confirmedActions}><Pressable accessibilityLabel="Message customer" onPress={() => navigation.navigate("Conversation", { bookingId: booking.id })} style={styles.iconAction}><MessageSquareText size={18} color={colors.ink} /></Pressable><Pressable accessibilityLabel="Call customer" onPress={() => navigation.navigate("CallRoom", { bookingId: booking.id })} style={styles.iconAction}><Phone size={17} color={colors.ink} /></Pressable>{booking.payment_report?.invoice_html ? <Pressable accessibilityLabel="Download invoice" onPress={() => downloadInvoice(booking.payment_report.invoice_html, booking.payment_report.invoice_number).catch((error) => Alert.alert("Invoice unavailable", error?.message || "Please try again."))} style={styles.iconAction}><ReceiptText size={17} color={colors.ink} /></Pressable> : null}<Pressable accessibilityLabel="Share trip location" onPress={() => navigation.navigate("ShareLocation", { booking })} style={styles.tripAction}><Text style={styles.tripText}>Trip tools</Text><ChevronRight size={16} color={colors.white} /></Pressable></View> : null}</View>
+    <View style={styles.jobBody}><View style={styles.jobTop}><Text style={styles.jobTitle}>{booking.pooja_name}</Text><Text style={styles.status}>{pending ? "NEW REQUEST" : "SCHEDULED"}</Text></View><Text style={styles.customer}>{booking.customer_name}</Text><View style={styles.location}><MapPin size={12} color={colors.muted2} /><Text style={styles.locationText} numberOfLines={1}>{booking.address}</Text></View><Text style={styles.price}>₹{amount(booking).toLocaleString("en-IN")}</Text>{pending ? <View style={styles.pendingActions}><Button title="Accept" onPress={() => onAction(booking, "accept")} style={styles.accept} /><Button title="Decline" variant="danger" onPress={() => onAction(booking, "reject")} style={styles.decline} /></View> : null}{confirmed ? <View style={styles.confirmedActions}><Pressable accessibilityLabel="Message customer" onPress={() => navigation.navigate("Conversation", { bookingId: booking.id })} style={styles.iconAction}><MessageSquareText size={18} color={colors.ink} /></Pressable><Pressable accessibilityLabel="In-app call customer" onPress={() => startInAppCall(navigation, { bookingId: booking.id, booking })} style={styles.iconAction}><Phone size={17} color={colors.ink} /></Pressable>{booking.payment_report?.invoice_html ? <Pressable accessibilityLabel="Download invoice" onPress={() => downloadInvoice(booking.payment_report.invoice_html, booking.payment_report.invoice_number).catch((error) => Alert.alert("Invoice unavailable", error?.message || "Please try again."))} style={styles.iconAction}><ReceiptText size={17} color={colors.ink} /></Pressable> : null}<Pressable accessibilityLabel="Share trip location" onPress={() => navigation.navigate("ShareLocation", { booking })} style={styles.tripAction}><Text style={styles.tripText}>Trip tools</Text><ChevronRight size={16} color={colors.white} /></Pressable></View> : null}</View>
   </View>;
 }
 

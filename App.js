@@ -3,9 +3,9 @@ import { StatusBar } from "expo-status-bar";
 import { NavigationContainer, DefaultTheme, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Animated, Platform, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Animated, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from "@expo-google-fonts/inter";
-import { House, CalendarDays, MessagesSquare, CircleUserRound, ChartNoAxesCombined, CalendarClock, BotMessageSquare, BriefcaseBusiness } from "lucide-react-native";
+import { House, CalendarDays, MessagesSquare, CircleUserRound, ChartNoAxesCombined, CalendarClock, BotMessageSquare, BriefcaseBusiness, ChevronLeft } from "lucide-react-native";
 import * as Linking2 from "expo-linking";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/lib/auth";
@@ -225,7 +225,31 @@ function Router() {
         }
       }}
     >
-      <RootStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.cotton }, headerShadowVisible: false, headerStyle: { backgroundColor: colors.white }, headerTintColor: colors.ink, headerTitleStyle: { fontSize: 16, fontWeight: "700" }, headerBackTitleVisible: false }}>
+      <RootStack.Navigator
+        screenOptions={({ navigation }) => ({
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.cotton },
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: colors.white },
+          headerTintColor: colors.ink,
+          headerTitleStyle: { fontSize: 16, fontWeight: "700" },
+          headerBackTitleVisible: false,
+          headerTitleAlign: "center",
+          headerTopInsetEnabled: true,
+          headerLeft: ({ canGoBack }) =>
+            canGoBack ? (
+              <Pressable
+                testID="header-back-button"
+                accessibilityLabel="Go back"
+                hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+                onPress={() => navigation.goBack()}
+                style={({ pressed }) => [{ padding: 6, marginLeft: -6 }, pressed && { opacity: 0.6 }]}
+              >
+                <ChevronLeft size={24} color={colors.ink} />
+              </Pressable>
+            ) : null,
+        })}
+      >
         {!user && !role && (
           <RootStack.Screen name="RolePicker" component={RolePicker} />
         )}
@@ -235,7 +259,7 @@ function Router() {
         {user && user.role === "customer" && (
           <>
             <RootStack.Screen name="Tabs" component={CustomerTabs} />
-            <RootStack.Screen name="PriestList" component={PriestList} options={{ headerShown: true, title: "Priests" }} />
+            <RootStack.Screen name="PriestList" component={PriestList} options={{ headerShown: false }} />
             <RootStack.Screen name="PriestDetail" component={PriestDetail} options={{ headerShown: true, title: "" }} />
             <RootStack.Screen name="Booking" component={Booking} options={{ headerShown: true, title: "Book" }} />
             <RootStack.Screen name="RequestPooja" component={RequestPooja} options={{ headerShown: true, title: "Request proposals" }} />
@@ -305,14 +329,17 @@ function LoginSplash({ role, onDone }) {
 function AuthAppFrame() {
   const { user, role } = useAuth();
   const [showSplash, setShowSplash] = useState(false);
-  const hadUser = useRef(Boolean(user));
+  const splashShownForUser = useRef(null);
 
   useEffect(() => {
-    const hasUser = Boolean(user);
-    if (hasUser && !hadUser.current) {
-      setShowSplash(true);
+    if (user?.id) {
+      if (splashShownForUser.current !== user.id) {
+        splashShownForUser.current = user.id;
+        setShowSplash(true);
+      }
+    } else {
+      splashShownForUser.current = null;
     }
-    hadUser.current = hasUser;
   }, [user]);
 
   return (

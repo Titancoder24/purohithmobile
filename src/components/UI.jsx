@@ -96,10 +96,15 @@ export function SectionHeader({ title, subtitle }) {
   );
 }
 
-export function Field({ label, children }) {
+export function Field({ label, required = false, children, style }) {
   return (
-    <View style={{ marginBottom: spacing.md }}>
-      {label ? <Text style={{ fontSize: font.sizes.sm, color: colors.muted2, marginBottom: 6, fontWeight: "600" }}>{label}</Text> : null}
+    <View style={[{ marginBottom: spacing.md }, style]}>
+      {label ? (
+        <Text style={{ fontSize: font.sizes.sm, color: colors.muted2, marginBottom: 6, fontWeight: "600" }}>
+          {label}
+          {required ? <Text style={{ color: colors.danger, fontWeight: "700" }}> *</Text> : null}
+        </Text>
+      ) : null}
       {children}
     </View>
   );

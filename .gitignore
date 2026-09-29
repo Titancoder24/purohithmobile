@@ -11,3 +11,5 @@ artifacts/
 .env*
 !.env.example
 supabase/.temp/
+*.apk
+.eas/
