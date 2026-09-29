@@ -234,6 +234,8 @@ function Router() {
           headerTintColor: colors.ink,
           headerTitleStyle: { fontSize: 16, fontWeight: "700" },
           headerBackTitleVisible: false,
+          headerTitleAlign: "center",
+          headerTopInsetEnabled: true,
           headerLeft: ({ canGoBack }) =>
             canGoBack ? (
               <Pressable

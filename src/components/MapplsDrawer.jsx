@@ -1,24 +1,27 @@
 import React from "react";
-import { Modal, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { MapPin, Navigation, X } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radii, spacing } from "../lib/theme";
 import MapplsMap from "./MapplsMap";
 import { normalizeLocation, openInMappls, openInMapplsDirections } from "../lib/maps";
 
 export default function MapplsDrawer({ visible, onClose, location }) {
+  const insets = useSafeAreaInsets();
   const point = normalizeLocation(location);
   const title = point.title || point.pooja_name || "Ceremony location";
   const address = point.address || "Service address";
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <SafeAreaView style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
           <View style={styles.handle} />
           <View style={styles.header}>
             <View style={styles.pin}><MapPin size={18} color={colors.saffron} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.kicker}>MAPPLS LOCATION</Text>
-              <Text style={styles.title}>{title}</Text>
+              <Text style={styles.title} numberOfLines={1}>{title}</Text>
             </View>
             <Pressable accessibilityLabel="Close map drawer" onPress={onClose} style={styles.close}><X size={18} color={colors.ink} /></Pressable>
           </View>
@@ -39,30 +42,30 @@ export default function MapplsDrawer({ visible, onClose, location }) {
               <Text style={styles.secondaryText}>Mappls Directions</Text>
             </Pressable>
           </View>
-        </SafeAreaView>
+        </View>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,.42)" },
-  sheet: { width: "100%", maxWidth: 760, alignSelf: "center", maxHeight: "88%", paddingHorizontal: spacing.lg, paddingTop: 8, paddingBottom: spacing.lg, borderTopLeftRadius: 26, borderTopRightRadius: 26, backgroundColor: colors.white },
-  handle: { width: 48, height: 5, borderRadius: 3, alignSelf: "center", backgroundColor: "#DED8CE", marginBottom: 12 },
-  header: { flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 14 },
-  pin: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#FFF1EB" },
+  overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,.48)" },
+  sheet: { width: "100%", maxWidth: 760, alignSelf: "center", maxHeight: "90%", paddingHorizontal: spacing.lg, paddingTop: 12, borderTopLeftRadius: 26, borderTopRightRadius: 26, backgroundColor: colors.white },
+  handle: { width: 44, height: 4, borderRadius: 2, alignSelf: "center", backgroundColor: "#DED8CE", marginBottom: 12 },
+  header: { flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 12 },
+  pin: { width: 40, height: 40, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: "#FFF1EB" },
   kicker: { color: colors.saffron, fontSize: 9, fontWeight: "800", letterSpacing: .8 },
-  title: { color: colors.ink, fontSize: 18, fontWeight: "800", marginTop: 3 },
-  close: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: colors.muted },
-  mapWrap: { height: 330, overflow: "hidden", borderRadius: radii.lg, borderWidth: 1, borderColor: colors.warmBorder },
-  map: { minHeight: 330 },
-  detail: { paddingVertical: 14, borderBottomWidth: 1, borderColor: colors.warmBorder },
-  address: { color: colors.ink, fontSize: 14, lineHeight: 20, fontWeight: "800" },
-  meta: { color: colors.muted2, fontSize: 11, lineHeight: 17, marginTop: 3 },
+  title: { color: colors.ink, fontSize: 17, fontWeight: "800", marginTop: 2 },
+  close: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors.muted },
+  mapWrap: { height: 240, overflow: "hidden", borderRadius: radii.lg, borderWidth: 1, borderColor: colors.warmBorder },
+  map: { height: "100%", width: "100%" },
+  detail: { paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.warmBorder },
+  address: { color: colors.ink, fontSize: 13, lineHeight: 19, fontWeight: "700" },
+  meta: { color: colors.muted2, fontSize: 11, lineHeight: 16, marginTop: 2 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingTop: 14 },
-  primary: { flex: 1, minWidth: 150, minHeight: 50, borderRadius: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.brandBrown, borderBottomWidth: 3, borderBottomColor: colors.brandBrownDark },
+  primary: { flex: 1, minWidth: 140, minHeight: 48, borderRadius: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.brandBrown, borderBottomWidth: 3, borderBottomColor: colors.brandBrownDark },
   primaryText: { color: colors.white, fontSize: 13, fontWeight: "800" },
-  secondary: { flex: 1, minWidth: 150, minHeight: 50, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.warmBorder },
+  secondary: { flex: 1, minWidth: 140, minHeight: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.warmBorder },
   secondaryText: { color: colors.ink, fontSize: 13, fontWeight: "800" },
   pressed: { transform: [{ translateY: 2 }, { scale: .99 }], opacity: .88 },
 });

@@ -185,9 +185,11 @@ async function providerRequests(supabase: any, _body: any, identity: any) {
   const { data: priest } = await supabase.from("priest_profiles").select("id,pooja_slugs").eq("user_id", userId).maybeSingle();
   if (!priest) return json({ requests: [] });
 
+  const todayStr = new Date().toISOString().slice(0, 10);
   const { data, error } = await supabase.from("ceremony_requests")
     .select("id,customer_id,pooja_slug,ceremony_date,ceremony_time,address,landmark,notes,budget_min_inr,budget_max_inr,status,payment_status,payment_submission_id,invoice_number,latitude,longitude,created_at")
-    .eq("status", "open");
+    .eq("status", "open")
+    .gte("ceremony_date", todayStr);
   if (error) throw error;
 
   const filtered = (data || []).filter((item: any) => (priest.pooja_slugs || []).includes(item.pooja_slug));

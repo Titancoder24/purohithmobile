@@ -44,7 +44,7 @@ export async function registerForPush() {
       await api.post("/users/push-token", { token, platform: Platform.OS });
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.warn("push register failed", e?.response?.data || e?.message);
+      console.log("push register skipped/failed", e?.response?.data || e?.message);
     }
   }
   return token;

@@ -39,17 +39,30 @@ export default function PriestDashboard() {
     catch (error) { Alert.alert("Booking update failed", error?.message || "Try again."); }
   };
 
+  const isPastDate = (dateStr) => {
+    if (!dateStr) return false;
+    const endOfDay = new Date(`${dateStr}T23:59:59`);
+    return endOfDay.getTime() < Date.now();
+  };
+
   const analytics = useMemo(() => {
     const now = new Date(); now.setHours(0, 0, 0, 0);
     const days = Array.from({ length: 7 }, (_, index) => { const day = new Date(now); day.setDate(now.getDate() + index); return day; });
     const values = days.map((day) => items.filter((booking) => ["confirmed", "completed"].includes(booking.status) && toDate(booking.booking_date).toDateString() === day.toDateString()).reduce((sum, booking) => sum + amount(booking), 0));
     const scheduled = items.filter((booking) => ["confirmed", "completed"].includes(booking.status));
     const completed = items.filter((booking) => booking.status === "completed");
-    const pending = items.filter((booking) => booking.status === "pending");
+    const pending = items.filter((booking) => booking.status === "pending" && !isPastDate(booking.booking_date));
     return { days, values, pending, scheduled, completed, scheduledValue: scheduled.reduce((sum, booking) => sum + amount(booking), 0), settledValue: completed.reduce((sum, booking) => sum + amount(booking), 0) };
   }, [items]);
 
-  const work = [...items].filter((booking) => !["completed", "rejected", "cancelled"].includes(booking.status)).sort((a, b) => `${a.booking_date}${a.booking_time}`.localeCompare(`${b.booking_date}${b.booking_time}`));
+  const work = [...items]
+    .filter((booking) => {
+      if (["completed", "rejected", "cancelled"].includes(booking.status)) return false;
+      // Expired pending requests (past date) should not appear in the active work queue
+      if (booking.status === "pending" && isPastDate(booking.booking_date)) return false;
+      return true;
+    })
+    .sort((a, b) => `${a.booking_date}${a.booking_time}`.localeCompare(`${b.booking_date}${b.booking_time}`));
   const firstName = (user?.name || "Purohit").split(" ")[0];
 
   return <ScrollView style={styles.root} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={colors.saffron} />}>
