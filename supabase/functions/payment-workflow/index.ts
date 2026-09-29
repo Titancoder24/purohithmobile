@@ -24,6 +24,7 @@ Deno.serve(async (req) => {
     if (body.action === "list_proposals") return listProposals(supabase, body, identity);
     if (body.action === "award_proposal") return awardProposal(supabase, body, identity);
     if (body.action === "provider_requests") return providerRequests(supabase, body, identity);
+    if (body.action === "customer_requests") return customerRequests(supabase, identity);
     if (body.action === "send_proposal") return sendProposal(supabase, body, identity);
     if (body.action === "create_cashfree_order") return createCashfreeOrder(supabase, body, identity);
     if (body.action === "verify_cashfree_order") return verifyCashfreeOrder(supabase, body, identity);
@@ -185,11 +186,9 @@ async function providerRequests(supabase: any, _body: any, identity: any) {
   const { data: priest } = await supabase.from("priest_profiles").select("id,pooja_slugs").eq("user_id", userId).maybeSingle();
   if (!priest) return json({ requests: [] });
 
-  const todayStr = new Date().toISOString().slice(0, 10);
   const { data, error } = await supabase.from("ceremony_requests")
     .select("id,customer_id,pooja_slug,ceremony_date,ceremony_time,address,landmark,notes,budget_min_inr,budget_max_inr,status,payment_status,payment_submission_id,invoice_number,latitude,longitude,created_at")
-    .eq("status", "open")
-    .gte("ceremony_date", todayStr);
+    .eq("status", "open");
   if (error) throw error;
 
   const filtered = (data || []).filter((item: any) => (priest.pooja_slugs || []).includes(item.pooja_slug));
@@ -203,6 +202,34 @@ async function providerRequests(supabase: any, _body: any, identity: any) {
     myProposals = Object.fromEntries((proposals || []).map((item: any) => [item.request_id, item]));
   }
   return json({ requests: filtered.map((item: any) => mapProviderRequest({ ...item, pooja_name: poojaNames[item.pooja_slug] }, myProposals[item.id])) });
+}
+
+async function customerRequests(supabase: any, identity: any) {
+  const userId = identity.id;
+  if (!userId) return json({ requests: [] });
+  const { data: requests, error } = await supabase.from("ceremony_requests")
+    .select("id,pooja_slug,ceremony_date,ceremony_time,address,landmark,notes,budget_min_inr,budget_max_inr,status,payment_status,awarded_proposal_id,latitude,longitude,created_at")
+    .eq("customer_id", userId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  const poojaSlugs = [...new Set((requests || []).map((r: any) => r.pooja_slug).filter(Boolean))];
+  const { data: poojas } = poojaSlugs.length ? await supabase.from("poojas").select("slug,name").in("slug", poojaSlugs) : { data: [] };
+  const poojaNames = Object.fromEntries((poojas || []).map((p: any) => [p.slug, p.name]));
+  const requestIds = (requests || []).map((r: any) => r.id);
+  let proposalCounts: Record<string, number> = {};
+  if (requestIds.length) {
+    const { data: proposals } = await supabase.from("ceremony_proposals").select("request_id").in("request_id", requestIds);
+    (proposals || []).forEach((p: any) => {
+      proposalCounts[p.request_id] = (proposalCounts[p.request_id] || 0) + 1;
+    });
+  }
+  return json({
+    requests: (requests || []).map((r: any) => ({
+      ...r,
+      pooja_name: poojaNames[r.pooja_slug] || r.pooja_slug || "Ceremony",
+      proposal_count: proposalCounts[r.id] || 0,
+    })),
+  });
 }
 
 async function sendProposal(supabase: any, body: any, identity: any) {

@@ -9,9 +9,15 @@ import { downloadInvoice, listBookings, listPaymentReports, updateProviderBookin
 import { useAuth } from "../../lib/auth";
 import { startInAppCall } from "../../lib/calls";
 
-const DEMO_BOOKINGS = [
-  { id: "demo-request", status: "pending", pooja_name: "Griha Pravesh", customer_name: "Ananya Rao", customer_phone: "9000000101", booking_date: "2026-08-12", booking_time: "09:00", address: "Indiranagar, Bengaluru", total_amount: 5100 },
-  { id: "demo-confirmed", status: "confirmed", pooja_name: "Satyanarayan Pooja", customer_name: "Raghav Iyer", customer_phone: "9000000102", booking_date: "2026-08-10", booking_time: "07:30", address: "Jayanagar, Bengaluru", total_amount: 3100 },
+const futureDate = (days) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+const getDemoBookings = () => [
+  { id: "demo-request", status: "pending", pooja_name: "Griha Pravesh", customer_name: "Ananya Rao", customer_phone: "9000000101", booking_date: futureDate(1), booking_time: "09:00", address: "Indiranagar, Bengaluru", total_amount: 5100 },
+  { id: "demo-confirmed", status: "confirmed", pooja_name: "Satyanarayan Pooja", customer_name: "Raghav Iyer", customer_phone: "9000000102", booking_date: futureDate(3), booking_time: "07:30", address: "Jayanagar, Bengaluru", total_amount: 3100 },
 ];
 
 const toDate = (value) => new Date(`${value}T00:00:00`);
@@ -24,7 +30,7 @@ export default function PriestDashboard() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    if (user?.demo) return setItems(DEMO_BOOKINGS);
+    if (user?.demo) return setItems(getDemoBookings());
     try {
       const [{ bookings }, { reports }] = await Promise.all([listBookings(), listPaymentReports()]);
       const reportsByBooking = Object.fromEntries((reports || []).map((report) => [report.booking_id, report]));
@@ -39,30 +45,17 @@ export default function PriestDashboard() {
     catch (error) { Alert.alert("Booking update failed", error?.message || "Try again."); }
   };
 
-  const isPastDate = (dateStr) => {
-    if (!dateStr) return false;
-    const endOfDay = new Date(`${dateStr}T23:59:59`);
-    return endOfDay.getTime() < Date.now();
-  };
-
   const analytics = useMemo(() => {
     const now = new Date(); now.setHours(0, 0, 0, 0);
     const days = Array.from({ length: 7 }, (_, index) => { const day = new Date(now); day.setDate(now.getDate() + index); return day; });
     const values = days.map((day) => items.filter((booking) => ["confirmed", "completed"].includes(booking.status) && toDate(booking.booking_date).toDateString() === day.toDateString()).reduce((sum, booking) => sum + amount(booking), 0));
     const scheduled = items.filter((booking) => ["confirmed", "completed"].includes(booking.status));
     const completed = items.filter((booking) => booking.status === "completed");
-    const pending = items.filter((booking) => booking.status === "pending" && !isPastDate(booking.booking_date));
+    const pending = items.filter((booking) => booking.status === "pending");
     return { days, values, pending, scheduled, completed, scheduledValue: scheduled.reduce((sum, booking) => sum + amount(booking), 0), settledValue: completed.reduce((sum, booking) => sum + amount(booking), 0) };
   }, [items]);
 
-  const work = [...items]
-    .filter((booking) => {
-      if (["completed", "rejected", "cancelled"].includes(booking.status)) return false;
-      // Expired pending requests (past date) should not appear in the active work queue
-      if (booking.status === "pending" && isPastDate(booking.booking_date)) return false;
-      return true;
-    })
-    .sort((a, b) => `${a.booking_date}${a.booking_time}`.localeCompare(`${b.booking_date}${b.booking_time}`));
+  const work = [...items].filter((booking) => !["completed", "rejected", "cancelled"].includes(booking.status)).sort((a, b) => `${a.booking_date}${a.booking_time}`.localeCompare(`${b.booking_date}${b.booking_time}`));
   const firstName = (user?.name || "Purohit").split(" ")[0];
 
   return <ScrollView style={styles.root} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={colors.saffron} />}>

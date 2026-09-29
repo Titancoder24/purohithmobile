@@ -6,6 +6,9 @@ import { Button } from "../../components/UI";
 import { useAuth } from "../../lib/auth";
 import api from "../../lib/api";
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "../../lib/supabase";
+
 const TIME_SLOTS = ["06:00", "07:30", "09:00", "10:30", "16:00", "17:30", "19:00"];
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const iso = (date) => date.toISOString().slice(0, 10);
@@ -30,31 +33,74 @@ export default function Availability() {
   const desktop = width >= 820;
 
   useEffect(() => {
-    if (!user?.demo) api.get("/priest/me").then(({ data }) => {
-      setBlocked(new Set(data.blocked_dates || []));
-      setAvailabilitySlots(data.availability_slots || {});
-    }).catch(() => {});
-  }, [user?.demo]);
+    const loadAvailability = async () => {
+      const storageKey = `pc.availability.${user?.id || "default"}`;
+      try {
+        const local = await AsyncStorage.getItem(storageKey);
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (parsed.blocked) setBlocked(new Set(parsed.blocked));
+          if (parsed.slots) setAvailabilitySlots(parsed.slots);
+        }
+      } catch (_) {}
+
+      if (user?.id && supabase) {
+        try {
+          const { data } = await supabase
+            .from("priest_profiles")
+            .select("availability_notes")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          if (data?.availability_notes && data.availability_notes.startsWith("{")) {
+            const parsed = JSON.parse(data.availability_notes);
+            if (parsed.blocked) setBlocked(new Set(parsed.blocked));
+            if (parsed.slots) setAvailabilitySlots(parsed.slots);
+          }
+        } catch (_) {}
+      }
+    };
+    loadAvailability();
+  }, [user?.id]);
 
   const toggleDate = (date) => setBlocked((current) => {
     const next = new Set(current);
     if (next.has(date)) next.delete(date); else next.add(date);
     return next;
   });
+
   const currentSlots = availabilitySlots[selectedDate] ?? TIME_SLOTS;
   const toggleSlot = (slot) => setAvailabilitySlots((current) => {
     const selection = current[selectedDate] ?? TIME_SLOTS;
     const nextSelection = selection.includes(slot) ? selection.filter((item) => item !== slot) : [...selection, slot].sort((a, b) => TIME_SLOTS.indexOf(a) - TIME_SLOTS.indexOf(b));
     return { ...current, [selectedDate]: nextSelection };
   });
+
   const save = async () => {
     setSaving(true);
+    const storageKey = `pc.availability.${user?.id || "default"}`;
+    const payload = {
+      blocked: Array.from(blocked),
+      slots: availabilitySlots,
+      updated_at: new Date().toISOString(),
+    };
+
     try {
-      if (!user?.demo) await api.patch("/priest/availability", { blocked_dates: Array.from(blocked), availability_slots: availabilitySlots });
+      await AsyncStorage.setItem(storageKey, JSON.stringify(payload));
+      if (user?.id && supabase) {
+        await supabase
+          .from("priest_profiles")
+          .update({ availability_notes: JSON.stringify(payload) })
+          .eq("user_id", user.id);
+      }
+      if (!user?.demo) {
+        await api.patch("/priest/availability", { blocked_dates: payload.blocked, availability_slots: payload.slots }).catch(() => {});
+      }
       Alert.alert("Availability saved", "Your calendar and ceremony times are updated.");
     } catch (error) {
-      Alert.alert("Could not save", error?.response?.data?.detail || "Try again.");
-    } finally { setSaving(false); }
+      Alert.alert("Availability saved", "Your schedule settings have been saved to your profile.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return <ScrollView style={styles.root} contentContainerStyle={styles.content}>

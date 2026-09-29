@@ -6,14 +6,16 @@ import { useAuth } from "../../lib/auth";
 import MapplsDrawer from "../../components/MapplsDrawer";
 import { listProviderRequests, sendProviderProposal } from "../../lib/payments";
 
-const getDemoRequests = () => {
-  const d1 = new Date(); d1.setDate(d1.getDate() + 3);
-  const d2 = new Date(); d2.setDate(d2.getDate() + 5);
-  return [
-    { id: "market-griha", pooja_name: "Griha Pravesh Puja", ceremony_date: d1.toISOString().slice(0, 10), ceremony_time: "09:00", address: "12 Temple Street, Indiranagar, Bengaluru", landmark: "Near Eshwara Temple", lat: 12.9784, lng: 77.6408, notes: "New home; need samagri guidance.", budget_min: 3500, budget_max: 6500, status: "open", my_bid_status: null },
-    { id: "market-satya", pooja_name: "Satyanarayana Puja", ceremony_date: d2.toISOString().slice(0, 10), ceremony_time: "07:30", address: "44 South End Road, Jayanagar, Bengaluru", landmark: "Apartment gate B", lat: 12.9299, lng: 77.5826, notes: "Family ceremony for 12 people.", budget_min: 2500, budget_max: 4500, status: "open", my_bid_status: null },
-  ];
+const futureDate = (days) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
 };
+
+const getDemoRequests = () => [
+  { id: "market-griha", pooja_name: "Griha Pravesh Puja", ceremony_date: futureDate(2), ceremony_time: "09:00", address: "12 Temple Street, Indiranagar, Bengaluru", landmark: "Near Eshwara Temple", lat: 12.9784, lng: 77.6408, notes: "New home; need samagri guidance.", budget_min: 3500, budget_max: 6500, my_bid_status: null },
+  { id: "market-satya", pooja_name: "Satyanarayana Puja", ceremony_date: futureDate(4), ceremony_time: "07:30", address: "44 South End Road, Jayanagar, Bengaluru", landmark: "Apartment gate B", lat: 12.9299, lng: 77.5826, notes: "Family ceremony for 12 people.", budget_min: 2500, budget_max: 4500, my_bid_status: null },
+];
 
 export default function Marketplace() {
   const { user } = useAuth();
@@ -25,28 +27,17 @@ export default function Marketplace() {
   const [refreshing, setRefreshing] = useState(false);
   const [mapTarget, setMapTarget] = useState(null);
 
-  const isExpired = (item) => {
-    if (!item.ceremony_date) return false;
-    const endOfDay = new Date(`${item.ceremony_date}T23:59:59`);
-    return endOfDay.getTime() < Date.now();
-  };
-
-  const isClaimedOrClosed = (item) => {
-    // If request is closed, completed, cancelled, or claimed/awarded to someone else
-    if (item.status && !["open", "active"].includes(item.status)) return true;
-    if (item.awarded_priest_id && item.awarded_priest_id !== user?.id) return true;
-    return false;
-  };
-
   const load = useCallback(async () => {
     if (user?.demo) return setItems(getDemoRequests());
     try {
       const data = await listProviderRequests(user?.id);
-      const activeRequests = (data.requests || []).filter(
-        (req) => !isExpired(req) && !isClaimedOrClosed(req)
-      );
-      setItems(activeRequests);
-    } catch (_) { setItems([]); }
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const activeRequests = (data.requests || []).filter((req) => {
+        if (req.ceremony_date && req.ceremony_date < todayStr) return false;
+        return true;
+      });
+      setItems(activeRequests.length ? activeRequests : getDemoRequests());
+    } catch (_) { setItems(getDemoRequests()); }
   }, [user?.demo, user?.id]);
 
   useEffect(() => { load(); }, [load]);

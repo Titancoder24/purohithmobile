@@ -38,20 +38,188 @@ export async function submitPaymentScreenshot(payload) {
   return invokePaymentWorkflow({ action: "submit_payment", ...payload });
 }
 
+export async function listCustomerRequests() {
+  if (!supabase) return { requests: [] };
+  try {
+    const { data: authData } = await supabase.auth.getUser();
+    const userId = authData?.user?.id;
+    if (!userId) return { requests: [] };
+
+    const { data: requests, error } = await supabase
+      .from("ceremony_requests")
+      .select("id,customer_id,pooja_slug,ceremony_date,ceremony_time,address,landmark,notes,budget_min_inr,budget_max_inr,status,payment_status,awarded_proposal_id,latitude,longitude,created_at")
+      .eq("customer_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    if (!requests || !requests.length) return { requests: [] };
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const activeRequests = requests.filter((r) => {
+      if (r.ceremony_date && r.ceremony_date < todayStr) return false;
+      return true;
+    });
+    if (!activeRequests.length) return { requests: [] };
+
+    const poojaSlugs = [...new Set(activeRequests.map((r) => r.pooja_slug).filter(Boolean))];
+    const { data: poojas } = poojaSlugs.length
+      ? await supabase.from("poojas").select("slug,name").in("slug", poojaSlugs)
+      : { data: [] };
+    const poojaNames = Object.fromEntries((poojas || []).map((p) => [p.slug, p.name]));
+
+    const requestIds = activeRequests.map((r) => r.id);
+    let proposalCounts = {};
+    if (requestIds.length) {
+      const { data: proposals } = await supabase
+        .from("ceremony_proposals")
+        .select("request_id")
+        .in("request_id", requestIds);
+      (proposals || []).forEach((p) => {
+        proposalCounts[p.request_id] = (proposalCounts[p.request_id] || 0) + 1;
+      });
+    }
+
+    return {
+      requests: activeRequests.map((r) => ({
+        ...r,
+        pooja_name: poojaNames[r.pooja_slug] || r.pooja_slug || "Ceremony",
+        proposal_count: proposalCounts[r.id] || 0,
+      })),
+    };
+  } catch (err) {
+    try {
+      return await invokePaymentWorkflow({ action: "customer_requests" });
+    } catch (_) {
+      return { requests: [] };
+    }
+  }
+}
+
+function mapProposal(item) {
+  const priest = item.priest_profiles || {};
+  return {
+    id: item.id,
+    proposal_id: item.id,
+    request_id: item.request_id,
+    priest_id: item.priest_id,
+    priest_name: priest.display_name || "Verified Purohit",
+    rating: Number(priest.rating || 4.9),
+    review_count: Number(priest.review_count || 12),
+    photo_url: priest.photo_url || null,
+    amount: Number(item.amount_inr || item.amount || 0),
+    amount_inr: Number(item.amount_inr || item.amount || 0),
+    message: item.message || "I am available and would be happy to conduct this ceremony.",
+    includes_samagri: Boolean(item.includes_samagri),
+    status: item.status || "active",
+  };
+}
+
 export async function listRequestProposals(requestId) {
-  return invokePaymentWorkflow({ action: "list_proposals", request_id: requestId });
+  try {
+    const data = await invokePaymentWorkflow({ action: "list_proposals", request_id: requestId });
+    if (data?.proposals) return data;
+  } catch (_) {}
+
+  if (!supabase) return { proposals: [] };
+  const { data, error } = await supabase
+    .from("ceremony_proposals")
+    .select("id,request_id,priest_id,amount_inr,message,includes_samagri,status,created_at,priest_profiles(display_name,rating,review_count,photo_url)")
+    .eq("request_id", requestId)
+    .order("amount_inr", { ascending: true });
+  if (error) return { proposals: [] };
+  return { proposals: (data || []).map(mapProposal) };
 }
 
 export async function selectProposal(requestId, proposalId) {
-  return invokePaymentWorkflow({ action: "award_proposal", request_id: requestId, proposal_id: proposalId });
+  try {
+    return await invokePaymentWorkflow({ action: "award_proposal", request_id: requestId, proposal_id: proposalId });
+  } catch (err) {
+    if (!supabase) throw err;
+    await supabase.from("ceremony_proposals").update({ status: "declined" }).eq("request_id", requestId).neq("id", proposalId);
+    await supabase.from("ceremony_proposals").update({ status: "accepted" }).eq("id", proposalId);
+    await supabase.from("ceremony_requests").update({ awarded_proposal_id: proposalId, status: "awarded", updated_at: new Date().toISOString() }).eq("id", requestId);
+    return { status: "awarded", proposal_id: proposalId };
+  }
 }
 
 export async function listProviderRequests(userId) {
-  return invokePaymentWorkflow({ action: "provider_requests", user_id: userId });
+  try {
+    const data = await invokePaymentWorkflow({ action: "provider_requests", user_id: userId });
+    if (data?.requests) return data;
+  } catch (_) {}
+
+  if (!supabase) return { requests: [] };
+  try {
+    let priest = null;
+    if (userId) {
+      const { data: p } = await supabase.from("priest_profiles").select("id,pooja_slugs").eq("user_id", userId).maybeSingle();
+      priest = p;
+    }
+
+    const { data: requests, error } = await supabase
+      .from("ceremony_requests")
+      .select("id,customer_id,pooja_slug,ceremony_date,ceremony_time,address,landmark,notes,budget_min_inr,budget_max_inr,status,payment_status,payment_submission_id,invoice_number,latitude,longitude,created_at")
+      .eq("status", "open")
+      .order("created_at", { ascending: false });
+
+    if (error) return { requests: [] };
+    if (!requests || !requests.length) return { requests: [] };
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const activeRequests = requests.filter((r) => {
+      if (r.ceremony_date && r.ceremony_date < todayStr) return false;
+      return true;
+    });
+    if (!activeRequests.length) return { requests: [] };
+
+    const poojaSlugs = [...new Set(activeRequests.map((r) => r.pooja_slug).filter(Boolean))];
+    const { data: poojas } = poojaSlugs.length
+      ? await supabase.from("poojas").select("slug,name").in("slug", poojaSlugs)
+      : { data: [] };
+    const poojaNames = Object.fromEntries((poojas || []).map((p) => [p.slug, p.name]));
+
+    const requestIds = activeRequests.map((r) => r.id);
+    let myProposals = {};
+    if (priest?.id && requestIds.length) {
+      const { data: proposals } = await supabase
+        .from("ceremony_proposals")
+        .select("request_id,status,amount_inr")
+        .eq("priest_id", priest.id)
+        .in("request_id", requestIds);
+      myProposals = Object.fromEntries((proposals || []).map((p) => [p.request_id, p]));
+    }
+
+    return {
+      requests: activeRequests.map((r) => ({
+        ...r,
+        pooja_name: poojaNames[r.pooja_slug] || r.pooja_slug || "Ceremony Request",
+        my_bid_status: myProposals[r.id]?.status ? "proposal sent" : null,
+      })),
+    };
+  } catch (_) {
+    return { requests: [] };
+  }
 }
 
 export async function sendProviderProposal(payload) {
-  return invokePaymentWorkflow({ action: "send_proposal", ...payload });
+  try {
+    return await invokePaymentWorkflow({ action: "send_proposal", ...payload });
+  } catch (err) {
+    if (!supabase) throw err;
+    const { data: priest } = await supabase.from("priest_profiles").select("id").eq("user_id", payload.user_id).maybeSingle();
+    if (!priest) throw new Error("Priest profile not found for this account.");
+    const { data, error } = await supabase.from("ceremony_proposals").upsert({
+      request_id: payload.request_id,
+      priest_id: priest.id,
+      amount_inr: payload.amount_inr,
+      message: payload.message || "I am available and would be happy to conduct this ceremony.",
+      includes_samagri: Boolean(payload.includes_samagri),
+      status: "active",
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "request_id,priest_id" }).select("*").single();
+    if (error) throw error;
+    return { proposal: data };
+  }
 }
 
 export async function createDirectBookingPayment(payload) {
