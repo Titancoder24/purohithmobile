@@ -102,7 +102,7 @@ export default function DAPWidget({ navigationRef }) {
     }
   };
 
-  const HIDE_ROUTES = ["Conversation", "Chat", "CallRoom", "TrackPriest", "Messages"];
+  const HIDE_ROUTES = ["Conversation", "Chat", "CallRoom", "TrackPriest", "Messages", "Dashboard"];
   if (!user || HIDE_ROUTES.includes(currentRoute)) return null;
 
   return (

@@ -47,15 +47,21 @@ export default function PriestDashboard() {
 
   const analytics = useMemo(() => {
     const now = new Date(); now.setHours(0, 0, 0, 0);
+    const todayStr = now.toISOString().slice(0, 10);
     const days = Array.from({ length: 7 }, (_, index) => { const day = new Date(now); day.setDate(now.getDate() + index); return day; });
     const values = days.map((day) => items.filter((booking) => ["confirmed", "completed"].includes(booking.status) && toDate(booking.booking_date).toDateString() === day.toDateString()).reduce((sum, booking) => sum + amount(booking), 0));
-    const scheduled = items.filter((booking) => ["confirmed", "completed"].includes(booking.status));
+    const upcoming = items.filter((booking) => !booking.booking_date || booking.booking_date >= todayStr);
+    const scheduled = upcoming.filter((booking) => ["confirmed", "completed"].includes(booking.status));
     const completed = items.filter((booking) => booking.status === "completed");
-    const pending = items.filter((booking) => booking.status === "pending");
+    const pending = upcoming.filter((booking) => booking.status === "pending");
     return { days, values, pending, scheduled, completed, scheduledValue: scheduled.reduce((sum, booking) => sum + amount(booking), 0), settledValue: completed.reduce((sum, booking) => sum + amount(booking), 0) };
   }, [items]);
 
-  const work = [...items].filter((booking) => !["completed", "rejected", "cancelled"].includes(booking.status)).sort((a, b) => `${a.booking_date}${a.booking_time}`.localeCompare(`${b.booking_date}${b.booking_time}`));
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const work = [...items]
+    .filter((booking) => !["completed", "rejected", "cancelled"].includes(booking.status))
+    .filter((booking) => !booking.booking_date || booking.booking_date >= todayStr)
+    .sort((a, b) => `${a.booking_date}${a.booking_time}`.localeCompare(`${b.booking_date}${b.booking_time}`));
   const firstName = (user?.name || "Purohit").split(" ")[0];
 
   return <ScrollView style={styles.root} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={colors.saffron} />}>
