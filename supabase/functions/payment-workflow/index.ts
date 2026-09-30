@@ -145,14 +145,32 @@ async function submitPayment(supabase: any, body: any, identity: any) {
 async function listProposals(supabase: any, body: any, identity: any) {
   const requestId = cleanUuid(body.request_id);
   if (!requestId) return json({ proposals: [] });
-  const { data: request } = await supabase.from("ceremony_requests").select("customer_id").eq("id", requestId).maybeSingle();
+  const { data: request } = await supabase.from("ceremony_requests").select("id,customer_id,status,payment_status,awarded_proposal_id,booking_id,invoice_number").eq("id", requestId).maybeSingle();
   if (!request || (request.customer_id !== identity.id && !isAdmin(identity))) return json({ error: "Request not found" }, 404);
   const { data, error } = await supabase.from("ceremony_proposals")
     .select("id,request_id,priest_id,amount_inr,message,includes_samagri,status,created_at,priest_profiles(display_name,rating,review_count,photo_url)")
     .eq("request_id", requestId)
     .order("amount_inr", { ascending: true });
   if (error) throw error;
-  return json({ proposals: (data || []).map(mapProposal) });
+
+  let booking = null;
+  if (request.booking_id) {
+    const { data: b } = await supabase.from("bookings").select("id,status,payment_status,invoice_no,invoice_html,invoice_issued_at").eq("id", request.booking_id).maybeSingle();
+    booking = b;
+  }
+
+  return json({
+    proposals: (data || []).map(mapProposal),
+    request: {
+      id: request.id,
+      status: request.status,
+      payment_status: request.payment_status,
+      awarded_proposal_id: request.awarded_proposal_id,
+      booking_id: request.booking_id,
+      invoice_number: request.invoice_number,
+    },
+    booking,
+  });
 }
 
 async function awardProposal(supabase: any, body: any, identity: any) {

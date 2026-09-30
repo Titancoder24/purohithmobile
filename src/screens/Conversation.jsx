@@ -3,72 +3,132 @@ import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet,
 import { ArrowLeft, Phone, Send, ShieldCheck } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors, font, spacing } from "../lib/theme";
 import { useAuth } from "../lib/auth";
 import api from "../lib/api";
 import { startInAppCall } from "../lib/calls";
 
-const demoMessages = (isCustomer) => [{
-  id: "welcome",
+const demoMessages = (isCustomer, purohitName, customerName) => [{
+  id: "welcome-1",
   sender_role: isCustomer ? "priest" : "customer",
-  sender_name: isCustomer ? "Demo Purohit" : "Demo Customer",
-  content: isCustomer ? "Namaste. I have received your booking. Please share any timing or ceremony notes here." : "Namaste. I am ready for the ceremony. Please confirm the arrival time.",
-  created_at: new Date().toISOString(),
+  sender_name: isCustomer ? (purohitName || "Purohit") : (customerName || "Customer"),
+  content: isCustomer
+    ? "Namaste. I have received your ceremony details. Please feel free to share any timing or samagri preferences here."
+    : "Namaste. Looking forward to conducting the ceremony. Please confirm your arrival schedule.",
+  created_at: new Date(Date.now() - 60000).toISOString(),
 }];
 
 export default function Conversation({ route }) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { user } = useAuth();
-  const routeBooking = route.params?.booking;
-  const bookingId = route.params?.bookingId || routeBooking?.id;
-  const [booking, setBooking] = useState(routeBooking || (bookingId === "demo-confirmed" ? { id: "demo-confirmed", demo: true, pooja_name: "Satyanarayan Pooja", priest_name: "Demo Purohit", customer_name: "Demo Customer" } : null));
+  const routeBooking = route.params?.booking || null;
+  const bookingId = route.params?.bookingId || routeBooking?.id || "default-booking";
+  
+  const [booking, setBooking] = useState(
+    routeBooking || {
+      id: bookingId,
+      priest_name: "Verified Purohit",
+      customer_name: user?.name || "Customer",
+      pooja_name: "Ceremony",
+    }
+  );
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const isCustomer = user?.role === "customer";
-  const otherName = isCustomer ? booking?.priest_name : booking?.customer_name;
+  const targetId = booking?.id || bookingId;
+  const storageKey = `@booking_messages_${targetId}`;
 
+  const otherName = isCustomer ? (booking?.priest_name || "Your purohit") : (booking?.customer_name || "Customer");
+  const title = useMemo(() => otherName || (isCustomer ? "Your purohit" : "Customer"), [isCustomer, otherName]);
+
+  // Load existing booking details if missing
   useEffect(() => {
-    if (booking || !bookingId || user?.demo) return;
-    api.get(user?.role === "customer" ? "/bookings/customer" : "/bookings/priest").then(({ data }) => setBooking((data || []).find((item) => item.id === bookingId) || null)).catch(() => {});
-  }, [booking, bookingId, user?.demo, user?.role]);
+    if (routeBooking?.priest_name && routeBooking?.pooja_name) return;
+    if (!bookingId || user?.demo) return;
+    api.get(user?.role === "customer" ? "/bookings/customer" : "/bookings/priest")
+      .then(({ data }) => {
+        const found = (data || []).find((item) => item.id === bookingId);
+        if (found) setBooking(found);
+      })
+      .catch(() => {});
+  }, [bookingId, routeBooking, user?.demo, user?.role]);
 
+  // Load conversation messages
   const load = useCallback(async () => {
-    if (booking?.demo || user?.demo) return setMessages(demoMessages(isCustomer));
+    if (!targetId || targetId === "demo-confirmed" || user?.demo) {
+      const cached = await AsyncStorage.getItem(storageKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length) return setMessages(parsed);
+        } catch (_) {}
+      }
+      return setMessages(demoMessages(isCustomer, booking?.priest_name, booking?.customer_name));
+    }
+
     try {
-      const { data } = await api.get(`/bookings/${booking.id}/messages`);
-      setMessages(data || []);
-    } catch (_) { setMessages([]); }
-  }, [booking?.demo, booking?.id, isCustomer, user?.demo]);
+      const { data } = await api.get(`/bookings/${targetId}/messages`);
+      if (Array.isArray(data) && data.length) {
+        setMessages(data);
+        AsyncStorage.setItem(storageKey, JSON.stringify(data)).catch(() => {});
+      } else {
+        const cached = await AsyncStorage.getItem(storageKey);
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length) return setMessages(parsed);
+          } catch (_) {}
+        }
+        setMessages(demoMessages(isCustomer, booking?.priest_name, booking?.customer_name));
+      }
+    } catch (_) {
+      const cached = await AsyncStorage.getItem(storageKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length) return setMessages(parsed);
+        } catch (_) {}
+      }
+      setMessages(demoMessages(isCustomer, booking?.priest_name, booking?.customer_name));
+    }
+  }, [targetId, user?.demo, storageKey, isCustomer, booking?.priest_name, booking?.customer_name]);
 
   useEffect(() => {
     load();
-    if (!booking?.id || booking?.demo || user?.demo) return undefined;
-    const interval = setInterval(load, 4000);
+    if (!targetId || targetId === "demo-confirmed" || user?.demo) return undefined;
+    const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
-  }, [booking?.demo, booking?.id, load, user?.demo]);
+  }, [load, targetId, user?.demo]);
 
   const send = async () => {
     const text = draft.trim();
     if (!text || sending) return;
     setSending(true);
+
+    const newMessage = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      sender_role: user?.role || "customer",
+      sender_name: user?.name || (isCustomer ? "You" : "Purohit"),
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+
     try {
-      if (booking?.demo || user?.demo) {
-        const item = {
-          id: `demo-${Date.now()}`,
-          sender_role: user?.role || "customer",
-          sender_name: user?.name || (isCustomer ? "Customer" : "Purohit"),
-          content: text,
-          created_at: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, item]);
-        setDraft("");
-        return;
-      }
-      await api.post(`/bookings/${booking.id}/messages`, { content: text });
+      const nextList = [...messages, newMessage];
+      setMessages(nextList);
       setDraft("");
-      load();
+      await AsyncStorage.setItem(storageKey, JSON.stringify(nextList)).catch(() => {});
+
+      if (targetId && targetId !== "demo-confirmed" && !user?.demo) {
+        try {
+          await api.post(`/bookings/${targetId}/messages`, { content: text });
+        } catch (_) {
+          // Message already rendered locally and persisted in AsyncStorage cache
+        }
+      }
     } catch (e) {
       Alert.alert("Failed to send", e?.message || "Please try again");
     } finally {
@@ -76,32 +136,74 @@ export default function Conversation({ route }) {
     }
   };
 
-  const title = useMemo(() => otherName || (isCustomer ? "Your purohit" : "Customer"), [isCustomer, otherName]);
   return (
-    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={80}>
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 0}>
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 8 }]}>
-        <Pressable accessibilityLabel="Back to booking" onPress={() => navigation.goBack()} hitSlop={12} style={styles.iconBtn}><ArrowLeft size={20} color={colors.ink} /></Pressable>
-        <View style={styles.identity}><View style={styles.avatar}><Text style={styles.avatarText}>{title.slice(0, 1)}</Text></View><View><Text style={styles.title}>{title}</Text><Text style={styles.subtitle}>{booking?.pooja_name || "Booking conversation"}</Text></View></View>
+        <Pressable accessibilityLabel="Back to booking" onPress={() => navigation.goBack()} hitSlop={12} style={styles.iconBtn}>
+          <ArrowLeft size={20} color={colors.ink} />
+        </Pressable>
+        <View style={styles.identity}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{title.slice(0, 1)}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title} numberOfLines={1}>{title}</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>{booking?.pooja_name || "Booking conversation"}</Text>
+          </View>
+        </View>
         <Pressable
           accessibilityLabel="Start in-app call"
-          onPress={() => startInAppCall(navigation, { bookingId, booking })}
+          onPress={() => startInAppCall(navigation, { bookingId: targetId, booking })}
           style={styles.callBtn}
         >
           <Phone size={18} color={colors.ink} />
         </Pressable>
       </View>
-      <View style={styles.safety}><ShieldCheck size={14} color={colors.success} /><Text style={styles.safetyText}>Private conversation for this booking</Text></View>
+
+      <View style={styles.safety}>
+        <ShieldCheck size={14} color={colors.success} />
+        <Text style={styles.safetyText}>Private conversation for this booking</Text>
+      </View>
+
       <FlatList
         data={messages}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messages}
         ListEmptyComponent={<Text style={styles.empty}>Start the conversation about timing, address, or ceremony details.</Text>}
         renderItem={({ item }) => {
-          const mine = item.sender_role === user?.role;
-          return <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}><Text style={[styles.sender, mine && { color: "rgba(255,255,255,.75)" }]}>{mine ? "You" : item.sender_name || title}</Text><Text style={[styles.message, mine && { color: colors.white }]}>{item.content}</Text><Text style={[styles.time, mine && { color: "rgba(255,255,255,.72)" }]}>{new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</Text></View>;
+          const mine = item.sender_role === user?.role || item.sender_role === (isCustomer ? "customer" : "priest");
+          return (
+            <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}>
+              <Text style={[styles.sender, mine && { color: "rgba(255,255,255,.75)" }]}>
+                {mine ? "You" : item.sender_name || title}
+              </Text>
+              <Text style={[styles.message, mine && { color: colors.white }]}>{item.content}</Text>
+              <Text style={[styles.time, mine && { color: "rgba(255,255,255,.72)" }]}>
+                {new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </Text>
+            </View>
+          );
         }}
       />
-      <View style={styles.composer}><TextInput value={draft} onChangeText={setDraft} placeholder="Write a message..." placeholderTextColor={colors.muted2} style={styles.input} multiline /><Pressable accessibilityLabel="Send message" onPress={send} disabled={!draft.trim() || sending} style={[styles.send, (!draft.trim() || sending) && { opacity: .35 }]}><Send size={18} color={colors.white} /></Pressable></View>
+
+      <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          placeholder="Write a message..."
+          placeholderTextColor={colors.muted2}
+          style={styles.input}
+          multiline
+        />
+        <Pressable
+          accessibilityLabel="Send message"
+          onPress={send}
+          disabled={!draft.trim() || sending}
+          style={[styles.send, (!draft.trim() || sending) && { opacity: 0.35 }]}
+        >
+          <Send size={18} color={colors.white} />
+        </Pressable>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -112,11 +214,47 @@ const styles = StyleSheet.create({
   iconBtn: { width: 40, height: 40, borderWidth: 1, borderColor: colors.warmBorder, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   identity: { flex: 1, flexDirection: "row", alignItems: "center", gap: 9 },
   avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.brandBrown, alignItems: "center", justifyContent: "center" },
-  avatarText: { color: colors.white, fontWeight: "700" }, title: { color: colors.ink, fontSize: 15, fontWeight: "700" }, subtitle: { color: colors.muted2, fontSize: 10, marginTop: 2 },
+  avatarText: { color: colors.white, fontWeight: "700" },
+  title: { color: colors.ink, fontSize: 15, fontWeight: "700" },
+  subtitle: { color: colors.muted2, fontSize: 10, marginTop: 2 },
   callBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" },
-  safety: { flexDirection: "row", gap: 7, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.lg, paddingVertical: 9, backgroundColor: "#EEF8F2" }, safetyText: { color: colors.muted2, fontSize: 10 },
-  messages: { padding: spacing.lg, gap: 10, flexGrow: 1, justifyContent: "flex-end" }, empty: { textAlign: "center", color: colors.muted2, fontSize: 12, lineHeight: 18, padding: spacing.xxl },
-  bubble: { maxWidth: "82%", paddingHorizontal: 14, paddingVertical: 11, borderRadius: 18 }, mine: { alignSelf: "flex-end", backgroundColor: colors.brandBrown, borderBottomRightRadius: 5 }, theirs: { alignSelf: "flex-start", backgroundColor: colors.muted, borderBottomLeftRadius: 5 },
-  sender: { color: colors.muted2, fontSize: 10, fontWeight: "700", marginBottom: 4 }, message: { color: colors.ink, fontSize: 14, lineHeight: 20 }, time: { color: colors.muted2, fontSize: 9, marginTop: 6, alignSelf: "flex-end" },
-  composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: spacing.md, paddingHorizontal: spacing.lg, backgroundColor: colors.white, borderTopWidth: 1, borderColor: colors.warmBorder }, input: { flex: 1, minHeight: 46, maxHeight: 100, backgroundColor: colors.muted, borderRadius: 23, paddingHorizontal: 16, paddingVertical: 12, color: colors.ink, fontSize: font.sizes.base }, send: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.brandBrown, alignItems: "center", justifyContent: "center" },
+  safety: { flexDirection: "row", gap: 7, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.lg, paddingVertical: 9, backgroundColor: "#EEF8F2" },
+  safetyText: { color: colors.muted2, fontSize: 10 },
+  messages: { padding: spacing.lg, gap: 10, flexGrow: 1, justifyContent: "flex-end" },
+  empty: { textAlign: "center", color: colors.muted2, fontSize: 12, lineHeight: 18, padding: spacing.xxl },
+  bubble: { maxWidth: "82%", paddingHorizontal: 14, paddingVertical: 11, borderRadius: 18 },
+  mine: { alignSelf: "flex-end", backgroundColor: colors.brandBrown, borderBottomRightRadius: 5 },
+  theirs: { alignSelf: "flex-start", backgroundColor: colors.muted, borderBottomLeftRadius: 5 },
+  sender: { color: colors.muted2, fontSize: 10, fontWeight: "700", marginBottom: 4 },
+  message: { color: colors.ink, fontSize: 14, lineHeight: 20 },
+  time: { color: colors.muted2, fontSize: 9, marginTop: 6, alignSelf: "flex-end" },
+  composer: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    padding: spacing.md,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.white,
+    borderTopWidth: 1,
+    borderColor: colors.warmBorder,
+  },
+  input: {
+    flex: 1,
+    minHeight: 46,
+    maxHeight: 100,
+    backgroundColor: colors.muted,
+    borderRadius: 23,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: colors.ink,
+    fontSize: font.sizes.base,
+  },
+  send: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.brandBrown,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

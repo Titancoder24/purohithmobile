@@ -121,13 +121,19 @@ export async function listRequestProposals(requestId) {
   } catch (_) {}
 
   if (!supabase) return { proposals: [] };
+  const { data: request } = await supabase.from("ceremony_requests").select("id,status,payment_status,awarded_proposal_id,booking_id,invoice_number").eq("id", requestId).maybeSingle();
+  let booking = null;
+  if (request?.booking_id) {
+    const { data: b } = await supabase.from("bookings").select("id,status,payment_status,invoice_no,invoice_html,invoice_issued_at").eq("id", request.booking_id).maybeSingle();
+    booking = b;
+  }
   const { data, error } = await supabase
     .from("ceremony_proposals")
     .select("id,request_id,priest_id,amount_inr,message,includes_samagri,status,created_at,priest_profiles(display_name,rating,review_count,photo_url)")
     .eq("request_id", requestId)
     .order("amount_inr", { ascending: true });
-  if (error) return { proposals: [] };
-  return { proposals: (data || []).map(mapProposal) };
+  if (error) return { proposals: [], request, booking };
+  return { proposals: (data || []).map(mapProposal), request, booking };
 }
 
 export async function selectProposal(requestId, proposalId) {

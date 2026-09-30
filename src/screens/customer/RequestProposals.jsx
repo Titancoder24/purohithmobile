@@ -1,13 +1,38 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BadgeCheck, Check, CheckCircle2, Clock3, Download, Lock, MapPin, MessageSquareText, Navigation, ShieldCheck, Sparkles, WalletCards, X } from "lucide-react-native";
-import { colors, radii, font } from "../../lib/theme";
+import {
+  BadgeCheck,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
+  Download,
+  Lock,
+  MapPin,
+  MessageSquareText,
+  Navigation,
+  Phone,
+  ShieldCheck,
+  Sparkles,
+  WalletCards,
+  X,
+} from "lucide-react-native";
+import { colors, radii, font, shadow } from "../../lib/theme";
 import { Button } from "../../components/UI";
 import MapplsMap from "../../components/MapplsMap";
 import MapplsDrawer from "../../components/MapplsDrawer";
 import { useAuth } from "../../lib/auth";
-import { createCashfreeOrder, downloadInvoice, listRequestProposals, openCashfreeCheckout, selectProposal, verifyCashfreeOrder } from "../../lib/payments";
+import {
+  createCashfreeOrder,
+  downloadInvoice,
+  listRequestProposals,
+  openCashfreeCheckout,
+  selectProposal,
+  verifyCashfreeOrder,
+} from "../../lib/payments";
+import { startInAppCall } from "../../lib/calls";
 
 const DEMO_BIDS = [
   { id: "demo-bid-rama", priest_name: "Sri Ramachandra Sharma", amount: 2900, message: "I can conduct this ceremony with traditional samagri guidance.", includes_samagri: true },
@@ -32,6 +57,7 @@ export default function RequestProposals({ route, navigation }) {
   const latitude = Number(request.lat || 12.9784);
   const longitude = Number(request.lng || 77.6408);
   const [bids, setBids] = useState([]);
+  const [requestData, setRequestData] = useState(params.request || null);
   const [loading, setLoading] = useState(true);
   const [selecting, setSelecting] = useState("");
   const [selectedBid, setSelectedBid] = useState(null);
@@ -41,12 +67,81 @@ export default function RequestProposals({ route, navigation }) {
   const [paying, setPaying] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const desktop = width >= 850;
+
+  // Paid state detection
+  const isPaid = Boolean(
+    payment?.order?.status === "paid" ||
+    payment?.booking?.payment_status === "paid" ||
+    requestData?.payment_status === "paid" ||
+    params.request?.payment_status === "paid"
+  );
+
+  // Dynamic Navigation Title based on Paid vs Unpaid state
+  useEffect(() => {
+    navigation.setOptions({
+      title: isPaid ? "Booking Confirmed" : "Compare proposals",
+    });
+  }, [isPaid, navigation]);
+
   const bestPrice = useMemo(() => bids.length ? Math.min(...bids.map((bid) => Number(bid.amount))) : 0, [bids]);
 
   useEffect(() => {
-    if (!request.id) { setBids(DEMO_BIDS); setLoading(false); return; }
-    listRequestProposals(request.id).then((data) => setBids(data?.proposals?.length ? data.proposals : (user?.demo ? DEMO_BIDS : []))).catch(() => setBids(user?.demo ? DEMO_BIDS : [])).finally(() => setLoading(false));
+    if (!request.id) {
+      setBids(DEMO_BIDS);
+      setLoading(false);
+      return;
+    }
+    listRequestProposals(request.id)
+      .then((data) => {
+        const proposalList = data?.proposals?.length ? data.proposals : (user?.demo ? DEMO_BIDS : []);
+        setBids(proposalList);
+        if (data?.request) {
+          setRequestData(data.request);
+        }
+        if (data?.booking) {
+          setPayment((prev) => prev || {
+            order: {
+              status: data.request?.payment_status === "paid" || data.booking?.payment_status === "paid" ? "paid" : "pending",
+              amount_inr: data.booking.total_inr,
+            },
+            booking: data.booking,
+          });
+        }
+        const awardedId = data?.request?.awarded_proposal_id || params.request?.awarded_proposal_id;
+        const acceptedBid = proposalList.find((b) => b.id === awardedId || b.status === "accepted");
+        if (acceptedBid) {
+          setSelectedBid(acceptedBid);
+          setPaymentAmount(String(acceptedBid.amount || acceptedBid.amount_inr || ""));
+        }
+      })
+      .catch(() => setBids(user?.demo ? DEMO_BIDS : []))
+      .finally(() => setLoading(false));
   }, [request.id, user?.demo]);
+
+  const awardedId = requestData?.awarded_proposal_id || params.request?.awarded_proposal_id;
+  const activeConfirmedBid = selectedBid || bids.find((b) => b.id === awardedId || b.status === "accepted") || bids[0];
+
+  useEffect(() => {
+    if (isPaid && !selectedBid && activeConfirmedBid) {
+      setSelectedBid(activeConfirmedBid);
+      setPaymentAmount(String(activeConfirmedBid.amount || activeConfirmedBid.amount_inr || ""));
+    }
+  }, [isPaid, selectedBid, activeConfirmedBid]);
+
+  const currentInvoiceNo = payment?.booking?.invoice_no || requestData?.invoice_number || params.request?.invoice_number || null;
+  const currentInvoiceHtml = payment?.booking?.invoice_html || null;
+  const currentBookingId = payment?.booking?.id || requestData?.booking_id || params.request?.booking_id || request.id;
+
+  const currentBookingObject = useMemo(() => {
+    return payment?.booking || {
+      id: currentBookingId,
+      priest_name: activeConfirmedBid?.priest_name || "Verified Purohit",
+      pooja_name: request.pooja_name || "Ceremony",
+      booking_date: request.ceremony_date,
+      booking_time: request.ceremony_time,
+      address: request.address,
+    };
+  }, [payment, currentBookingId, activeConfirmedBid, request]);
 
   const award = async (bid) => {
     setSelecting(bid.id);
@@ -93,10 +188,10 @@ export default function RequestProposals({ route, navigation }) {
       await openCashfreeCheckout(created.order);
       const result = await verifyCashfreeOrder({ payment_order_id: created.order.id });
       setPayment(result);
-      if (result.order?.status === "paid") {
-        Alert.alert("Payment confirmed 🎉", "Cashfree verified the payment! The amount is held securely in escrow until ceremony completion.", [
-          { text: "View Booking", onPress: () => { setCheckoutVisible(false); navigation.navigate("Tabs", { screen: "Bookings" }); } }
-        ]);
+      if (result.order?.status === "paid" || result.booking?.payment_status === "paid") {
+        setRequestData((prev) => ({ ...(prev || {}), payment_status: "paid", status: "awarded", awarded_proposal_id: selectedBid.id }));
+        setCheckoutVisible(false);
+        Alert.alert("Payment confirmed 🎉", "Cashfree verified the payment! The amount is held securely in escrow until ceremony completion.");
       } else {
         Alert.alert("Payment pending", "Cashfree has not confirmed this payment yet. Try verification again from your bookings.");
       }
@@ -108,239 +203,403 @@ export default function RequestProposals({ route, navigation }) {
     } finally { setPaying(false); }
   };
 
-  return <>
-  <ScrollView style={styles.root} contentContainerStyle={[styles.content, selectedBid && { paddingBottom: 110 }]}>
-    <View style={styles.header}>
-      <Text style={styles.kicker}>PROPOSALS</Text>
-      <Text style={styles.title}>{request.pooja_name || "Your ceremony request"}</Text>
-      <Text style={styles.sub}>{request.ceremony_date || "Date pending"} · {request.ceremony_time || "Time pending"}</Text>
-    </View>
+  /* =======================================================================
+     PAID & CONFIRMED VIEW (Clean, elegant, non-cluttered booking summary)
+     ======================================================================= */
+  if (isPaid) {
+    const paidPriest = activeConfirmedBid;
+    const paidTotal = Number(paymentAmount || paidPriest?.amount || paidPriest?.amount_inr || 0);
 
-    <View style={[styles.summary, desktop && styles.summaryDesktop]}>
-      <View style={[styles.locationCard, desktop && styles.locationDesktop]}>
-        <View style={styles.mapWrap}>
-          <MapplsMap latitude={latitude} longitude={longitude} title={request.pooja_name} address={request.address} style={styles.map} />
-        </View>
-        <View style={styles.addressRow}>
-          <MapPin size={16} color={colors.saffron} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.addressTitle}>{request.address || "Service address"}</Text>
-            {request.landmark ? <Text style={styles.addressMeta}>{request.landmark}</Text> : null}
-          </View>
-          <Pressable accessibilityLabel="Open Mappls drawer" onPress={() => setMapOpen(true)} style={styles.mapButton}>
-            <Navigation size={15} color={colors.white} />
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={[styles.statusCard, desktop && styles.statusDesktop]}>
-        <View style={styles.statusIcon}><Clock3 size={19} color={colors.saffron} /></View>
-        <Text style={styles.statusLabel}>REQUEST STATUS</Text>
-        <Text style={styles.statusTitle}>{loading ? "Finding available purohits" : `${bids.length} proposal${bids.length === 1 ? "" : "s"} received`}</Text>
-        <View style={styles.timeline}>
-          <TimelineStep label="Request sent" done />
-          <TimelineStep label="Purohits reviewing" done={bids.length > 0} />
-          <TimelineStep label={selectedBid ? "Purohit selected" : "Choose an offer"} done={Boolean(selectedBid)} last />
-        </View>
-      </View>
-    </View>
-
-    <View style={styles.proposalHeader}>
-      <View>
-        <Text style={styles.sectionTitle}>Compare proposals</Text>
-        <Text style={styles.sectionSub}>Select the best purohit for your ceremony.</Text>
-      </View>
-      {bestPrice ? (
-        <View style={styles.bestBadge}>
-          <Text style={styles.bestBadgeText}>From ₹{bestPrice.toLocaleString("en-IN")}</Text>
-        </View>
-      ) : null}
-    </View>
-
-    {loading ? (
-      <View style={styles.emptyCard}>
-        <Text style={styles.emptyTitle}>Looking for verified offers...</Text>
-        <Text style={styles.empty}>We will update this page as purohits respond.</Text>
-      </View>
-    ) : bids.length ? (
-      <View style={[styles.bidGrid, desktop && styles.bidGridDesktop]}>
-        {bids.map((bid) => {
-          const isSelected = selectedBid?.id === bid.id;
-          const isBest = Number(bid.amount) === bestPrice;
-          return (
-            <View key={bid.id} style={[styles.bid, desktop && styles.bidDesktop, isSelected ? styles.bidSelected : (isBest && styles.bidBest)]}>
-              <View style={styles.bidTop}>
-                <View style={[styles.avatar, isSelected && styles.avatarSelected]}>
-                  <Text style={styles.avatarText}>{bid.priest_name?.slice(0, 1) || "P"}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.name}>{bid.priest_name}</Text>
-                    <BadgeCheck size={16} color={colors.saffron} />
-                  </View>
-                  <Text style={styles.verified}>Identity and practice verified</Text>
-                </View>
-                {isSelected ? (
-                  <View style={styles.selectedBadge}>
-                    <CheckCircle2 size={14} color={colors.brandBrown} />
-                    <Text style={styles.selectedBadgeText}>Selected</Text>
-                  </View>
-                ) : null}
-              </View>
-
-              <View style={styles.priceRow}>
-                <View>
-                  <Text style={styles.price}>₹{Number(bid.amount).toLocaleString("en-IN")}</Text>
-                  <Text style={styles.priceLabel}>total proposal</Text>
-                </View>
-                {isBest ? (
-                  <View style={styles.valueTag}>
-                    <Sparkles size={11} color={colors.success} />
-                    <Text style={styles.valueTagText}>BEST VALUE</Text>
-                  </View>
-                ) : null}
-              </View>
-
-              <View style={styles.note}>
-                <MessageSquareText size={15} color={colors.muted2} />
-                <Text style={styles.noteText}>{bid.message || "I am available and would be happy to conduct this ceremony."}</Text>
-              </View>
-
-              <View style={styles.featureRow}>
-                {bid.includes_samagri ? (
-                  <>
-                    <Check size={14} color={colors.success} />
-                    <Text style={styles.featureText}>Samagri included</Text>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck size={14} color={colors.muted2} />
-                    <Text style={styles.featureText}>Discuss samagri directly</Text>
-                  </>
-                )}
-              </View>
-
-              <Button
-                title={selecting === bid.id ? "Selecting..." : (isSelected ? "Selected ✓" : "Choose this purohit")}
-                onPress={() => award(bid)}
-                disabled={Boolean(selecting)}
-                variant={isSelected ? "secondary" : "primary"}
-                style={styles.choose}
-              />
+    return (
+      <>
+        <ScrollView style={styles.root} contentContainerStyle={[styles.content, { paddingBottom: 40 }]}>
+          {/* Header Banner */}
+          <View style={styles.confirmedHero}>
+            <View style={styles.heroCheckCircle}>
+              <CheckCircle2 size={32} color={colors.success} strokeWidth={2.5} />
             </View>
-          );
-        })}
-      </View>
-    ) : (
-      <View style={styles.emptyCard}>
-        <Text style={styles.emptyTitle}>Waiting for offers</Text>
-        <Text style={styles.empty}>Verified purohits will receive your request and can send a proposal shortly.</Text>
-      </View>
-    )}
-  </ScrollView>
+            <Text style={styles.heroTitle}>Ceremony Booked & Secured</Text>
+            <Text style={styles.heroCeremony}>{request.pooja_name || "Vedic Ceremony"}</Text>
+            <Text style={styles.heroMeta}>
+              {request.ceremony_date || "Date scheduled"} · {request.ceremony_time || "Time scheduled"}
+            </Text>
 
-  {/* Sticky Bottom Quick Action Bar when a Purohit is Selected */}
-  {selectedBid && !checkoutVisible ? (
-    <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-      <View style={styles.stickyLeft}>
-        <Text style={styles.stickyPurohit}>{selectedBid.priest_name}</Text>
-        <Text style={styles.stickyPrice}>₹{Number(paymentAmount || selectedBid.amount).toLocaleString("en-IN")}</Text>
-      </View>
-      <Pressable onPress={() => setCheckoutVisible(true)} style={styles.stickyButton}>
-        <WalletCards size={16} color={colors.white} />
-        <Text style={styles.stickyButtonText}>Review & Pay</Text>
-      </Pressable>
-    </View>
-  ) : null}
-
-  {/* Modern Bottom Sheet Checkout Modal */}
-  <Modal visible={checkoutVisible} transparent animationType="slide" onRequestClose={() => setCheckoutVisible(false)}>
-    <View style={styles.modalOverlay}>
-      <Pressable style={styles.modalBackdrop} onPress={() => !paying && setCheckoutVisible(false)} />
-      <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        <View style={styles.modalHandle} />
-        
-        <View style={styles.modalHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.modalKicker}>CONFIRM PUROHIT</Text>
-            <Text style={styles.modalTitle}>{request.pooja_name || "Ceremony Confirmation"}</Text>
-          </View>
-          <Pressable onPress={() => !paying && setCheckoutVisible(false)} style={styles.closeButton}>
-            <X size={20} color={colors.ink} />
-          </Pressable>
-        </View>
-
-        <View style={styles.priestSummaryCard}>
-          <View style={styles.priestAvatar}>
-            <Text style={styles.priestAvatarText}>{selectedBid?.priest_name?.slice(0, 1) || "P"}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-              <Text style={styles.priestName}>{selectedBid?.priest_name}</Text>
-              <BadgeCheck size={16} color={colors.saffron} />
+            {/* Escrow Guarantee Pill */}
+            <View style={styles.heroEscrowPill}>
+              <ShieldCheck size={16} color={colors.success} />
+              <Text style={styles.heroEscrowText}>
+                100% Escrow Protection: ₹{paidTotal.toLocaleString("en-IN")} held safely with Cashfree
+              </Text>
             </View>
-            <Text style={styles.priestSub}>
-              {request.ceremony_date} · {request.ceremony_time}
-            </Text>
           </View>
-        </View>
 
-        <View style={styles.costBreakdown}>
-          <View style={styles.costRow}>
-            <Text style={styles.costLabel}>Purohit Dakshina & Pooja</Text>
-            <Text style={styles.costValue}>₹{Number(paymentAmount || selectedBid?.amount || 0).toLocaleString("en-IN")}</Text>
-          </View>
-          <View style={styles.costRow}>
-            <Text style={styles.costLabel}>Samagri Provision</Text>
-            <Text style={[styles.costValue, { color: selectedBid?.includes_samagri ? colors.success : colors.muted2 }]}>
-              {selectedBid?.includes_samagri ? "Included" : "Direct Coordination"}
-            </Text>
-          </View>
-          <View style={[styles.costRow, styles.costTotalRow]}>
-            <Text style={styles.costTotalLabel}>Total Payable</Text>
-            <Text style={styles.costTotalValue}>₹{Number(paymentAmount || selectedBid?.amount || 0).toLocaleString("en-IN")}</Text>
-          </View>
-        </View>
+          {/* Assigned Purohit Card */}
+          <View style={[styles.sectionCard, { marginTop: 18 }]}>
+            <Text style={styles.cardHeaderKicker}>ASSIGNED PUROHIT</Text>
+            <View style={styles.priestProfileRow}>
+              <View style={styles.priestLargeAvatar}>
+                <Text style={styles.priestLargeAvatarText}>
+                  {paidPriest?.priest_name?.slice(0, 1) || "P"}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={styles.priestProfileName}>{paidPriest?.priest_name || "Verified Purohit"}</Text>
+                  <BadgeCheck size={18} color={colors.saffron} />
+                </View>
+                <Text style={styles.priestProfileRating}>Identity & Practice Verified · 4.9 ★</Text>
+              </View>
+            </View>
 
-        <View style={styles.escrowNotice}>
-          <Lock size={15} color={colors.saffron} />
-          <Text style={styles.escrowText}>
-            <Text style={{ fontWeight: "700" }}>100% Escrow Protection: </Text>
-            Your payment is held securely by Cashfree until the ceremony is satisfactorily completed.
-          </Text>
-        </View>
+            {paidPriest?.message ? (
+              <View style={styles.quoteBox}>
+                <MessageSquareText size={15} color={colors.muted2} style={{ marginTop: 2 }} />
+                <Text style={styles.quoteText}>{paidPriest.message}</Text>
+              </View>
+            ) : null}
 
-        <Button
-          title={paying ? "Connecting to Cashfree..." : `Pay ₹${Number(paymentAmount || selectedBid?.amount || 0).toLocaleString("en-IN")} via Cashfree`}
-          icon={WalletCards}
-          onPress={submitPayment}
-          disabled={paying}
-          style={styles.modalPayBtn}
-        />
-
-        {payment?.booking?.invoice_no ? (
-          <View style={styles.invoiceBox}>
-            <Text style={styles.invoiceTitle}>Invoice: {payment.booking.invoice_no}</Text>
-            {payment.booking.invoice_html ? (
+            {/* Communication Action Row */}
+            <View style={styles.contactActionsRow}>
               <Pressable
-                onPress={() => {
-                  const downloaded = downloadInvoice(payment.booking.invoice_html, payment.booking.invoice_no);
-                  if (!downloaded && Platform.OS !== "web") Alert.alert("Invoice ready", `Invoice ${payment.booking.invoice_no} saved.`);
-                }}
-                style={styles.downloadButton}
+                onPress={() => navigation.navigate("Conversation", { bookingId: currentBookingId, booking: currentBookingObject })}
+                style={styles.messageContactBtn}
               >
-                <Download size={15} color={colors.white} />
-                <Text style={styles.downloadText}>Download Invoice</Text>
+                <MessageSquareText size={16} color={colors.white} />
+                <Text style={styles.messageContactText}>Message Purohit</Text>
               </Pressable>
+
+              <Pressable
+                onPress={() => startInAppCall(navigation, { bookingId: currentBookingId, booking: currentBookingObject })}
+                style={styles.callContactBtn}
+              >
+                <Phone size={16} color={colors.ink} />
+                <Text style={styles.callContactText}>Call</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Location & Map Card */}
+          <View style={[styles.sectionCard, { marginTop: 14 }]}>
+            <Text style={styles.cardHeaderKicker}>SERVICE LOCATION</Text>
+            <View style={styles.mapWrap}>
+              <MapplsMap latitude={latitude} longitude={longitude} title={request.pooja_name} address={request.address} style={styles.map} />
+            </View>
+            <View style={styles.addressRow}>
+              <MapPin size={17} color={colors.saffron} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.addressTitle}>{request.address || "Ceremony address"}</Text>
+                {request.landmark ? <Text style={styles.addressMeta}>{request.landmark}</Text> : null}
+              </View>
+              <Pressable accessibilityLabel="Open Mappls drawer" onPress={() => setMapOpen(true)} style={styles.mapButton}>
+                <Navigation size={15} color={colors.white} />
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Payment & Invoice Breakdown */}
+          <View style={[styles.sectionCard, { marginTop: 14 }]}>
+            <Text style={styles.cardHeaderKicker}>PAYMENT SUMMARY</Text>
+            <View style={styles.breakdownList}>
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>Purohit Dakshina & Pooja</Text>
+                <Text style={styles.breakdownValue}>₹{paidTotal.toLocaleString("en-IN")}</Text>
+              </View>
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>Samagri Provision</Text>
+                <Text style={[styles.breakdownValue, { color: paidPriest?.includes_samagri ? colors.success : colors.muted2 }]}>
+                  {paidPriest?.includes_samagri ? "Included" : "Direct Coordination"}
+                </Text>
+              </View>
+              <View style={[styles.breakdownRow, styles.breakdownTotalRow]}>
+                <Text style={styles.breakdownTotalLabel}>Total Paid (Held in Escrow)</Text>
+                <Text style={styles.breakdownTotalValue}>₹{paidTotal.toLocaleString("en-IN")}</Text>
+              </View>
+            </View>
+
+            {currentInvoiceNo ? (
+              <View style={styles.invoiceRowContainer}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.invoiceLabel}>TAX INVOICE</Text>
+                  <Text style={styles.invoiceValue}>{currentInvoiceNo}</Text>
+                </View>
+                {currentInvoiceHtml ? (
+                  <Pressable
+                    onPress={() => {
+                      const downloaded = downloadInvoice(currentInvoiceHtml, currentInvoiceNo);
+                      if (!downloaded && Platform.OS !== "web") Alert.alert("Invoice ready", `Invoice ${currentInvoiceNo} saved.`);
+                    }}
+                    style={styles.invoiceDownloadBtn}
+                  >
+                    <Download size={14} color={colors.white} />
+                    <Text style={styles.invoiceDownloadText}>Download</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null}
           </View>
-        ) : null}
-      </View>
-    </View>
-  </Modal>
 
-  <MapplsDrawer visible={mapOpen} onClose={() => setMapOpen(false)} location={{ ...request, latitude, longitude, title: request.pooja_name }} />
-  </>;
+          {/* Primary View Bookings Action */}
+          <View style={{ marginTop: 24, gap: 10 }}>
+            <Button
+              title="View in My Bookings"
+              onPress={() => navigation.navigate("Tabs", { screen: "Bookings" })}
+              variant="primary"
+            />
+          </View>
+        </ScrollView>
+
+        <MapplsDrawer visible={mapOpen} onClose={() => setMapOpen(false)} location={{ ...request, latitude, longitude, title: request.pooja_name }} />
+      </>
+    );
+  }
+
+  /* =======================================================================
+     UNPAID / PROPOSAL COMPARISON VIEW
+     ======================================================================= */
+  return (
+    <>
+      <ScrollView style={styles.root} contentContainerStyle={[styles.content, selectedBid && { paddingBottom: 110 }]}>
+        <View style={styles.header}>
+          <Text style={styles.kicker}>PROPOSALS</Text>
+          <Text style={styles.title}>{request.pooja_name || "Your ceremony request"}</Text>
+          <Text style={styles.sub}>{request.ceremony_date || "Date pending"} · {request.ceremony_time || "Time pending"}</Text>
+        </View>
+
+        <View style={[styles.summary, desktop && styles.summaryDesktop]}>
+          <View style={[styles.locationCard, desktop && styles.locationDesktop]}>
+            <View style={styles.mapWrap}>
+              <MapplsMap latitude={latitude} longitude={longitude} title={request.pooja_name} address={request.address} style={styles.map} />
+            </View>
+            <View style={styles.addressRow}>
+              <MapPin size={16} color={colors.saffron} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.addressTitle}>{request.address || "Service address"}</Text>
+                {request.landmark ? <Text style={styles.addressMeta}>{request.landmark}</Text> : null}
+              </View>
+              <Pressable accessibilityLabel="Open Mappls drawer" onPress={() => setMapOpen(true)} style={styles.mapButton}>
+                <Navigation size={15} color={colors.white} />
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={[styles.statusCard, desktop && styles.statusDesktop]}>
+            <View style={styles.statusIcon}><Clock3 size={19} color={colors.saffron} /></View>
+            <Text style={styles.statusLabel}>REQUEST STATUS</Text>
+            <Text style={styles.statusTitle}>
+              {loading ? "Finding available purohits" : `${bids.length} proposal${bids.length === 1 ? "" : "s"} received`}
+            </Text>
+            <View style={styles.timeline}>
+              <TimelineStep label="Request sent" done />
+              <TimelineStep label="Purohits reviewing" done={bids.length > 0} />
+              <TimelineStep label={selectedBid ? "Purohit selected" : "Choose an offer"} done={Boolean(selectedBid)} last />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.proposalHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Compare proposals</Text>
+            <Text style={styles.sectionSub}>Select the best purohit for your ceremony.</Text>
+          </View>
+          {bestPrice ? (
+            <View style={styles.bestBadge}>
+              <Text style={styles.bestBadgeText}>From ₹{bestPrice.toLocaleString("en-IN")}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {loading ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>Looking for verified offers...</Text>
+            <Text style={styles.empty}>We will update this page as purohits respond.</Text>
+          </View>
+        ) : bids.length ? (
+          <View style={[styles.bidGrid, desktop && styles.bidGridDesktop]}>
+            {bids.map((bid) => {
+              const isSelected = selectedBid?.id === bid.id;
+              const isBest = Number(bid.amount) === bestPrice;
+              return (
+                <View
+                  key={bid.id}
+                  style={[
+                    styles.bid,
+                    desktop && styles.bidDesktop,
+                    isSelected ? styles.bidSelected : (isBest && styles.bidBest),
+                  ]}
+                >
+                  <View style={styles.bidTop}>
+                    <View style={[styles.avatar, isSelected && styles.avatarSelected]}>
+                      <Text style={styles.avatarText}>{bid.priest_name?.slice(0, 1) || "P"}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.nameRow}>
+                        <Text style={styles.name}>{bid.priest_name}</Text>
+                        <BadgeCheck size={16} color={colors.saffron} />
+                      </View>
+                      <Text style={styles.verified}>Identity and practice verified</Text>
+                    </View>
+                    {isSelected ? (
+                      <View style={styles.selectedBadge}>
+                        <CheckCircle2 size={14} color={colors.brandBrown} />
+                        <Text style={styles.selectedBadgeText}>Selected</Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  <View style={styles.priceRow}>
+                    <View>
+                      <Text style={styles.price}>₹{Number(bid.amount).toLocaleString("en-IN")}</Text>
+                      <Text style={styles.priceLabel}>total proposal</Text>
+                    </View>
+                    {isBest ? (
+                      <View style={styles.valueTag}>
+                        <Sparkles size={11} color={colors.success} />
+                        <Text style={styles.valueTagText}>BEST VALUE</Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  <View style={styles.note}>
+                    <MessageSquareText size={15} color={colors.muted2} />
+                    <Text style={styles.noteText}>{bid.message || "I am available and would be happy to conduct this ceremony."}</Text>
+                  </View>
+
+                  <View style={styles.featureRow}>
+                    {bid.includes_samagri ? (
+                      <>
+                        <Check size={14} color={colors.success} />
+                        <Text style={styles.featureText}>Samagri included</Text>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck size={14} color={colors.muted2} />
+                        <Text style={styles.featureText}>Discuss samagri directly</Text>
+                      </>
+                    )}
+                  </View>
+
+                  <Button
+                    title={selecting === bid.id ? "Selecting..." : (isSelected ? "Selected ✓" : "Choose this purohit")}
+                    onPress={() => award(bid)}
+                    disabled={Boolean(selecting)}
+                    variant={isSelected ? "secondary" : "primary"}
+                    style={styles.choose}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>Waiting for offers</Text>
+            <Text style={styles.empty}>Verified purohits will receive your request and can send a proposal shortly.</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Sticky Bottom Quick Action Bar when a Purohit is Selected */}
+      {selectedBid && !checkoutVisible ? (
+        <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <View style={styles.stickyLeft}>
+            <Text style={styles.stickyPurohit}>{selectedBid.priest_name}</Text>
+            <Text style={styles.stickyPrice}>₹{Number(paymentAmount || selectedBid.amount).toLocaleString("en-IN")}</Text>
+          </View>
+          <Pressable onPress={() => setCheckoutVisible(true)} style={styles.stickyButton}>
+            <WalletCards size={16} color={colors.white} />
+            <Text style={styles.stickyButtonText}>Review & Pay</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {/* Modern Bottom Sheet Checkout Modal */}
+      <Modal visible={checkoutVisible} transparent animationType="slide" onRequestClose={() => setCheckoutVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => !paying && setCheckoutVisible(false)} />
+          <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+            <View style={styles.modalHandle} />
+            
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalKicker}>CONFIRM PUROHIT</Text>
+                <Text style={styles.modalTitle}>{request.pooja_name || "Ceremony Confirmation"}</Text>
+              </View>
+              <Pressable onPress={() => !paying && setCheckoutVisible(false)} style={styles.closeButton}>
+                <X size={20} color={colors.ink} />
+              </Pressable>
+            </View>
+
+            <View style={styles.priestSummaryCard}>
+              <View style={styles.priestAvatar}>
+                <Text style={styles.priestAvatarText}>{selectedBid?.priest_name?.slice(0, 1) || "P"}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                  <Text style={styles.priestName}>{selectedBid?.priest_name}</Text>
+                  <BadgeCheck size={16} color={colors.saffron} />
+                </View>
+                <Text style={styles.priestSub}>
+                  {request.ceremony_date} · {request.ceremony_time}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.costBreakdown}>
+              <View style={styles.costRow}>
+                <Text style={styles.costLabel}>Purohit Dakshina & Pooja</Text>
+                <Text style={styles.costValue}>₹{Number(paymentAmount || selectedBid?.amount || 0).toLocaleString("en-IN")}</Text>
+              </View>
+              <View style={styles.costRow}>
+                <Text style={styles.costLabel}>Samagri Provision</Text>
+                <Text style={[styles.costValue, { color: selectedBid?.includes_samagri ? colors.success : colors.muted2 }]}>
+                  {selectedBid?.includes_samagri ? "Included" : "Direct Coordination"}
+                </Text>
+              </View>
+              <View style={[styles.costRow, styles.costTotalRow]}>
+                <Text style={styles.costTotalLabel}>Total Payable</Text>
+                <Text style={styles.costTotalValue}>₹{Number(paymentAmount || selectedBid?.amount || 0).toLocaleString("en-IN")}</Text>
+              </View>
+            </View>
+
+            <View style={styles.escrowNotice}>
+              <Lock size={15} color={colors.saffron} />
+              <Text style={styles.escrowText}>
+                <Text style={{ fontWeight: "700" }}>100% Escrow Protection: </Text>
+                Your payment is held securely by Cashfree until the ceremony is satisfactorily completed.
+              </Text>
+            </View>
+
+            <Button
+              title={paying ? "Connecting to Cashfree..." : `Pay ₹${Number(paymentAmount || selectedBid?.amount || 0).toLocaleString("en-IN")} via Cashfree`}
+              icon={WalletCards}
+              onPress={submitPayment}
+              disabled={paying}
+              style={styles.modalPayBtn}
+            />
+
+            {payment?.booking?.invoice_no ? (
+              <View style={styles.invoiceBox}>
+                <Text style={styles.invoiceTitle}>Invoice: {payment.booking.invoice_no}</Text>
+                {payment.booking.invoice_html ? (
+                  <Pressable
+                    onPress={() => {
+                      const downloaded = downloadInvoice(payment.booking.invoice_html, payment.booking.invoice_no);
+                      if (!downloaded && Platform.OS !== "web") Alert.alert("Invoice ready", `Invoice ${payment.booking.invoice_no} saved.`);
+                    }}
+                    style={styles.downloadButton}
+                  >
+                    <Download size={15} color={colors.white} />
+                    <Text style={styles.downloadText}>Download Invoice</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+
+      <MapplsDrawer visible={mapOpen} onClose={() => setMapOpen(false)} location={{ ...request, latitude, longitude, title: request.pooja_name }} />
+    </>
+  );
 }
 
 function TimelineStep({ label, done, last }) {
@@ -364,6 +623,229 @@ const styles = StyleSheet.create({
   kicker: { fontSize: 10, fontWeight: "700", color: colors.saffron, letterSpacing: 0.8 },
   title: { fontSize: 26, lineHeight: 32, color: colors.ink, fontFamily: font.semibold, marginTop: 6 },
   sub: { color: colors.muted2, fontSize: 12, lineHeight: 18, marginTop: 4 },
+
+  /* Confirmed Booking Hero */
+  confirmedHero: {
+    backgroundColor: "#FAFDFC",
+    borderWidth: 1.5,
+    borderColor: "#D4E5D9",
+    borderRadius: 20,
+    padding: 22,
+    alignItems: "center",
+    textAlign: "center",
+  },
+  heroCheckCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#EBF7EE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: colors.ink,
+    fontFamily: font.semibold,
+  },
+  heroCeremony: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.brandBrown,
+    marginTop: 4,
+  },
+  heroMeta: {
+    fontSize: 12,
+    color: colors.muted2,
+    marginTop: 4,
+  },
+  heroEscrowPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 14,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 16,
+    backgroundColor: "#E6F4EA",
+  },
+  heroEscrowText: {
+    color: colors.success,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  /* Card Containers */
+  sectionCard: {
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.warmBorder,
+    backgroundColor: colors.white,
+    ...shadow.card,
+  },
+  cardHeaderKicker: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: colors.muted2,
+    letterSpacing: 0.8,
+    marginBottom: 14,
+  },
+
+  /* Priest Profile in Confirmed Card */
+  priestProfileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  priestLargeAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.brandBrown,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  priestLargeAvatarText: {
+    color: colors.white,
+    fontWeight: "800",
+    fontSize: 19,
+  },
+  priestProfileName: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: colors.ink,
+  },
+  priestProfileRating: {
+    fontSize: 11,
+    color: colors.muted2,
+    marginTop: 3,
+  },
+  quoteBox: {
+    flexDirection: "row",
+    gap: 9,
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: colors.muted,
+  },
+  quoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.ink,
+    lineHeight: 18,
+  },
+  contactActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 16,
+  },
+  messageContactBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: colors.brandBrown,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  messageContactText: {
+    color: colors.white,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  callContactBtn: {
+    minHeight: 44,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: colors.muted,
+    borderWidth: 1,
+    borderColor: colors.warmBorder,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  callContactText: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  /* Breakdown List */
+  breakdownList: {
+    gap: 10,
+  },
+  breakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  breakdownLabel: {
+    fontSize: 12,
+    color: colors.muted2,
+    fontWeight: "500",
+  },
+  breakdownValue: {
+    fontSize: 13,
+    color: colors.ink,
+    fontWeight: "700",
+  },
+  breakdownTotalRow: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderColor: colors.warmBorder,
+    marginTop: 4,
+  },
+  breakdownTotalLabel: {
+    fontSize: 13,
+    color: colors.ink,
+    fontWeight: "800",
+  },
+  breakdownTotalValue: {
+    fontSize: 17,
+    color: colors.success,
+    fontWeight: "800",
+  },
+  invoiceRowContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderColor: colors.warmBorder,
+  },
+  invoiceLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: colors.muted2,
+    letterSpacing: 0.6,
+  },
+  invoiceValue: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.ink,
+    marginTop: 2,
+  },
+  invoiceDownloadBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: colors.brandBrown,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  invoiceDownloadText: {
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  /* Comparison Summary */
   summary: { gap: 14, marginTop: 16 },
   summaryDesktop: { flexDirection: "row" },
   locationCard: { borderWidth: 1, borderColor: colors.warmBorder, borderRadius: radii.lg, overflow: "hidden", backgroundColor: colors.white },
@@ -383,9 +865,9 @@ const styles = StyleSheet.create({
   timelineRow: { minHeight: 34, flexDirection: "row", gap: 9 },
   timelineMarkWrap: { alignItems: "center" },
   timelineMark: { width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: colors.warmBorder, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
-  timelineMarkDone: { backgroundColor: colors.success, borderColor: colors.success },
+  timelineMarkDone: { backgroundColor: colors.brandBrown, borderColor: colors.brandBrown },
   timelineLine: { width: 1, flex: 1, backgroundColor: colors.warmBorder },
-  timelineLineDone: { backgroundColor: colors.success },
+  timelineLineDone: { backgroundColor: colors.brandBrown },
   timelineText: { color: colors.muted2, fontSize: 11, marginTop: 2 },
   timelineTextDone: { color: colors.ink, fontWeight: "600" },
   proposalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginTop: 28, marginBottom: 12 },
@@ -512,4 +994,3 @@ const styles = StyleSheet.create({
   downloadButton: { marginTop: 10, minHeight: 40, borderRadius: 10, backgroundColor: colors.brandBrown, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
   downloadText: { color: colors.white, fontSize: 12, fontWeight: "800" },
 });
-

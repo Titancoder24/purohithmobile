@@ -17,8 +17,22 @@ export default function DAPWidget({ navigationRef }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState("");
+  const [currentRoute, setCurrentRoute] = useState("");
   const pulse = useRef(new Animated.Value(1)).current;
   const scrollRef = useRef();
+
+  useEffect(() => {
+    if (!navigationRef?.isReady?.()) return;
+    const updateRoute = () => {
+      const route = navigationRef.getCurrentRoute()?.name || "";
+      setCurrentRoute(route);
+    };
+    updateRoute();
+    const unsubscribe = navigationRef.addListener("state", updateRoute);
+    return () => {
+      if (typeof unsubscribe === "function") unsubscribe();
+    };
+  }, [navigationRef]);
 
   useEffect(() => {
     Animated.loop(
@@ -88,7 +102,8 @@ export default function DAPWidget({ navigationRef }) {
     }
   };
 
-  if (!user) return null;
+  const HIDE_ROUTES = ["Conversation", "Chat", "CallRoom", "TrackPriest"];
+  if (!user || HIDE_ROUTES.includes(currentRoute)) return null;
 
   return (
     <>
