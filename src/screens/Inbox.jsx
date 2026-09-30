@@ -166,7 +166,7 @@ export default function Inbox({ navigation }) {
               style={({ pressed }) => [styles.thread, styles.supportThread, pressed && styles.threadPressed]}
             >
               <View style={[styles.avatar, styles.supportAvatar]}>
-                <Bot size={24} color={colors.white} />
+                <Bot size={22} color={colors.white} />
               </View>
               <View style={styles.threadBody}>
                 <View style={styles.row}>
@@ -179,7 +179,7 @@ export default function Inbox({ navigation }) {
                 <Text style={styles.ceremony}>{item.pooja_name}</Text>
                 <Text style={styles.preview} numberOfLines={1}>{item.last}</Text>
               </View>
-              <ChevronRight size={18} color={colors.muted2} />
+              <ChevronRight size={18} color={colors.muted2} style={{ marginLeft: 6 }} />
             </Pressable>
           );
         }
@@ -196,6 +196,20 @@ function BookingThread({ item, isCustomer, navigation }) {
   const timeStr = item.booking_time || item.ceremony_time || "";
   const isPaid = item.payment_status === "paid" || item.status === "confirmed";
 
+  // Clean time format (e.g. 09:00:00 -> 09:00 AM)
+  const formattedTime = useMemo(() => {
+    if (!timeStr) return "";
+    const parts = timeStr.split(":");
+    if (parts.length >= 2) {
+      const h = parseInt(parts[0], 10);
+      const m = parts[1];
+      const ampm = h >= 12 ? "PM" : "AM";
+      const h12 = h % 12 || 12;
+      return `${h12}:${m} ${ampm}`;
+    }
+    return timeStr;
+  }, [timeStr]);
+
   return (
     <Pressable
       onPress={() => navigation.navigate("Conversation", { bookingId: item.id, booking: item })}
@@ -206,11 +220,11 @@ function BookingThread({ item, isCustomer, navigation }) {
       </View>
       <View style={styles.threadBody}>
         <View style={styles.row}>
-          <Text style={styles.name}>{other}</Text>
-          <Text style={styles.time}>{dateStr ? `${dateStr}` : ""}</Text>
+          <Text style={styles.name} numberOfLines={1}>{other}</Text>
+          <Text style={styles.time}>{dateStr}</Text>
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
-          <Text style={styles.ceremony}>{item.pooja_name || "Ceremony"}</Text>
+        <View style={styles.metaRow}>
+          <Text style={styles.ceremony} numberOfLines={1}>{item.pooja_name || "Ceremony"}</Text>
           {isPaid ? (
             <View style={styles.paidPill}>
               <Text style={styles.paidPillText}>Confirmed</Text>
@@ -218,7 +232,7 @@ function BookingThread({ item, isCustomer, navigation }) {
           ) : null}
         </View>
         <Text style={styles.preview} numberOfLines={1}>
-          {item.last || (timeStr ? `Scheduled at ${timeStr} · Tap to message` : "Tap to coordinate timing and samagri")}
+          {item.last || (formattedTime ? `Scheduled at ${formattedTime}` : "Tap to coordinate details")}
         </Text>
       </View>
       <View style={styles.actions}>
@@ -227,7 +241,7 @@ function BookingThread({ item, isCustomer, navigation }) {
           onPress={() => navigation.navigate("Conversation", { bookingId: item.id, booking: item })}
           style={styles.messageAction}
         >
-          <MessageSquareText size={17} color={colors.white} />
+          <MessageSquareText size={16} color={colors.white} />
         </Pressable>
         <Pressable
           accessibilityLabel="Call contact"
@@ -243,36 +257,45 @@ function BookingThread({ item, isCustomer, navigation }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.white },
-  content: { width: "100%", maxWidth: 900, alignSelf: "center", padding: 20, paddingBottom: 48 },
-  header: { marginBottom: 10, paddingTop: 12 },
+  content: { width: "100%", maxWidth: 900, alignSelf: "center", padding: 16, paddingBottom: 100 },
+  header: { marginBottom: 10, paddingTop: 8 },
   hero: { paddingBottom: 4 },
   heroCopy: { flex: 1, minWidth: 0 },
   kicker: { color: colors.saffron, fontSize: 10, fontWeight: "700", letterSpacing: 0.8 },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6 },
-  title: { color: colors.ink, fontSize: 32, fontWeight: "700" },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 },
+  title: { color: colors.ink, fontSize: 28, fontWeight: "700" },
   count: { minWidth: 26, height: 26, paddingHorizontal: 7, borderRadius: 13, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" },
   countText: { color: colors.ink, fontSize: 11, fontWeight: "700" },
-  subtitle: { color: colors.muted2, fontSize: 13, lineHeight: 19, marginTop: 5, maxWidth: 460 },
-  search: { marginTop: 20 },
-  filters: { marginTop: 12, marginBottom: 14 },
-  separator: { height: 1, backgroundColor: colors.warmBorder, marginLeft: 66 },
-  thread: { minHeight: 88, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, paddingHorizontal: 8, borderRadius: 12 },
+  subtitle: { color: colors.muted2, fontSize: 13, lineHeight: 18, marginTop: 4, maxWidth: 460 },
+  search: { marginTop: 16 },
+  filters: { marginTop: 12, marginBottom: 12 },
+  separator: { height: 1, backgroundColor: "#F2EFEB", marginLeft: 64 },
+  thread: {
+    minHeight: 80,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
   supportThread: { backgroundColor: "#FAF7F5", borderWidth: 1, borderColor: colors.warmBorder, marginVertical: 4 },
   threadPressed: { backgroundColor: colors.muted },
-  avatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.brandBrown, alignItems: "center", justifyContent: "center" },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brandBrown, alignItems: "center", justifyContent: "center" },
   supportAvatar: { backgroundColor: colors.saffron },
-  avatarText: { color: colors.white, fontSize: 19, fontWeight: "700" },
-  threadBody: { flex: 1, minWidth: 0 },
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
-  name: { color: colors.ink, fontSize: 15, fontWeight: "700" },
-  time: { color: colors.muted2, fontSize: 11 },
-  ceremony: { color: colors.saffron, fontSize: 11, fontWeight: "700" },
-  paidPill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: "#E6F4EA" },
-  paidPillText: { color: colors.success, fontSize: 9, fontWeight: "700" },
-  preview: { color: colors.muted2, fontSize: 12, marginTop: 4 },
-  actions: { flexDirection: "row", gap: 6 },
-  messageAction: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors.brandBrown },
-  callAction: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors.muted },
+  avatarText: { color: colors.white, fontSize: 17, fontWeight: "700" },
+  threadBody: { flex: 1, minWidth: 0, justifyContent: "center" },
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 6 },
+  name: { flex: 1, color: colors.ink, fontSize: 15, fontWeight: "700" },
+  time: { color: colors.muted2, fontSize: 11, fontWeight: "500" },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  ceremony: { color: colors.saffron, fontSize: 12, fontWeight: "700", flexShrink: 1 },
+  paidPill: { paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 5, backgroundColor: "#E6F4EA" },
+  paidPillText: { color: colors.success, fontSize: 9.5, fontWeight: "700" },
+  preview: { color: colors.muted2, fontSize: 12, marginTop: 3 },
+  actions: { flexDirection: "row", gap: 8, alignItems: "center", marginLeft: 4 },
+  messageAction: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.brandBrown },
+  callAction: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.warmBorder },
   onlineBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, backgroundColor: "#E6F4EA" },
   onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success },
   onlineText: { color: colors.success, fontSize: 9, fontWeight: "800" },
