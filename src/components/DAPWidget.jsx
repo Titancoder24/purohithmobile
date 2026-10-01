@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { bindBrandStyles } from "../lib/brandStyles";
+import { Animated, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BotMessageSquare, CornerDownRight, MousePointer2, Send, Sparkles, X } from "lucide-react-native";
 import { colors, font, radii, shadow, spacing } from "../lib/theme";
@@ -176,7 +177,7 @@ export default function DAPWidget({ navigationRef }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   fabWrap: { position: "absolute", right: 18, bottom: Platform.OS === "ios" ? 98 : 86, zIndex: 50 },
   fab: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.brandBrown, alignItems: "center", justifyContent: "center", ...shadow.saffron },
   fabSpark: { position: "absolute", right: -2, top: -2, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.warmBorder },

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { bindBrandStyles } from "../../lib/brandStyles";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { Clock3, LocateFixed, Navigation, ShieldCheck } from "lucide-react-native";
 import { colors, radii } from "../../lib/theme";
 import { Button } from "../../components/UI";
@@ -76,7 +77,7 @@ export default function TrackPriest({ route }) {
   </ScrollView>;
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: colors.white }, content: { padding: 20, paddingBottom: 40 },
   eyebrow: { fontSize: 10, color: colors.saffron, fontWeight: "700", letterSpacing: .7 }, title: { fontSize: 31, lineHeight: 37, color: colors.ink, fontWeight: "700", marginTop: 5 },
   subtitle: { color: colors.muted2, fontSize: 13, marginTop: 6, marginBottom: 20 },

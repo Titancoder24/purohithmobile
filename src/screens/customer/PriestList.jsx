@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, FlatList, Pressable, Image, ScrollView, TextInput, useWindowDimensions } from "react-native";
+import { bindBrandStyles } from "../../lib/brandStyles";
+import { View, Text, FlatList, Pressable, Image, ScrollView, TextInput, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MapPin, Languages, ShieldCheck, ArrowLeft, ArrowRight, SlidersHorizontal, BadgeCheck, Search, Check, X } from "lucide-react-native";
 import { colors, font } from "../../lib/theme";
@@ -208,7 +209,7 @@ function labelForCategory(value) {
   return POOJA_FILTERS.find(([slug]) => slug === value)?.[1] || "All Pujas";
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: colors.white },
   marketHeader: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 10 },
   backBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: colors.warmBorder, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },

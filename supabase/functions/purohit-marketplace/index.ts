@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
     });
 
     if (body.kind === "poojas") {
-      const [{ data, error }, { data: feeSetting }] = await Promise.all([
+      const [{ data, error }, { data: feeSetting }, appearance] = await Promise.all([
         supabase.from("poojas")
           .select("id,slug,name,description,duration_minutes,base_price_inr,image_url,is_active")
           .eq("is_active", true)
@@ -26,18 +26,22 @@ Deno.serve(async (req) => {
           .select("value")
           .eq("key", "payment_service_fee_percent")
           .maybeSingle(),
+        readCustomerAppearance(supabase),
       ]);
       if (error) throw error;
       const serviceFeePercent = Number(feeSetting?.value || 10);
-      return json({ poojas: data || [], service_fee_percent: serviceFeePercent });
+      return json({ poojas: data || [], service_fee_percent: serviceFeePercent, appearance });
     }
 
     if (body.kind === "settings") {
-      const { data: feeSetting } = await supabase.from("platform_settings")
-        .select("value")
-        .eq("key", "payment_service_fee_percent")
-        .maybeSingle();
-      return json({ service_fee_percent: Number(feeSetting?.value || 10) });
+      const [{ data: feeSetting }, appearance] = await Promise.all([
+        supabase.from("platform_settings")
+          .select("value")
+          .eq("key", "payment_service_fee_percent")
+          .maybeSingle(),
+        readCustomerAppearance(supabase),
+      ]);
+      return json({ service_fee_percent: Number(feeSetting?.value || 10), appearance });
     }
 
     if (body.kind === "profile") {
@@ -163,6 +167,20 @@ function mapPriest(profile: any) {
     max_price_inr: profile.max_price_inr,
     primary_service_area: profile.primary_service_area,
   };
+}
+
+async function readCustomerAppearance(supabase: ReturnType<typeof createClient>) {
+  const { data } = await supabase.from("platform_settings")
+    .select("value")
+    .eq("key", "customer_appearance")
+    .maybeSingle();
+  if (!data?.value) return null;
+  try {
+    const parsed = typeof data.value === "string" ? JSON.parse(data.value) : data.value;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function getSupabaseSecretKey() {

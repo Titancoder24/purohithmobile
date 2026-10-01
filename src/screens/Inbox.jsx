@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { bindBrandStyles } from "../lib/brandStyles";
+import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { Bot, CalendarDays, ChevronRight, MessageSquareText, Phone, Plus, ShieldCheck, Sparkles } from "lucide-react-native";
 import { colors, font, radii, shadow, spacing } from "../lib/theme";
 import { useAuth } from "../lib/auth";
@@ -255,7 +256,7 @@ function BookingThread({ item, isCustomer, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: colors.white },
   content: { width: "100%", maxWidth: 900, alignSelf: "center", padding: 16, paddingBottom: 100 },
   header: { marginBottom: 10, paddingTop: 8 },

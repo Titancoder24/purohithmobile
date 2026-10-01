@@ -1,5 +1,6 @@
 import React from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { bindBrandStyles } from "../lib/brandStyles";
+import { Image, Text, View } from "react-native";
 import { colors } from "../lib/theme";
 
 const logoSource = require("../../assets/images/purohithconnect-logo.png");
@@ -18,7 +19,7 @@ export default function BrandLogo({ size = 42, width, height, showText = true, s
   );
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   wrap: { flexDirection: "row", alignItems: "center", gap: 10, minWidth: 0 },
   logo: { resizeMode: "contain" },
   copy: { minWidth: 0 },

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { bindBrandStyles } from "../../lib/brandStyles";
 import { View, Text, StyleSheet, FlatList, Image, ImageBackground, Pressable, RefreshControl, ScrollView, TextInput, useWindowDimensions } from "react-native";
 import { Search, SlidersHorizontal, ArrowRight, Clock3, ShieldCheck, UserRoundPlus, UsersRound, FileText } from "lucide-react-native";
 import { colors, radii, font } from "../../lib/theme";
@@ -6,6 +7,7 @@ import api, { API_URL } from "../../lib/api";
 import { spiritualTap } from "../../lib/spiritualSounds";
 import { fetchMarketplacePoojas } from "../../lib/marketplace";
 import { usePreferences } from "../../lib/preferences";
+import { useAppearance } from "../../lib/appearance";
 
 const LOCAL_POOJAS = [
   { id: "local-gauri-ganesha", slug: "gauri-ganesha-vratha", name: "Gauri and Ganesha Vratha", category: "Festival", duration_hours: 2, base_price: 1800, localImage: require("../../../assets/images/gauri-ganesha-vratha.png") },
@@ -27,6 +29,7 @@ export default function Home({ navigation }) {
   const isTablet = width >= 600 && width < 900;
   const columns = desktop ? 3 : isTablet ? 2 : 1;
   const { area } = usePreferences();
+  const { tokens, applyRemoteAppearance } = useAppearance();
   const [poojas, setPoojas] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
@@ -35,6 +38,7 @@ export default function Home({ navigation }) {
   const load = async () => {
     try {
       const data = await fetchMarketplacePoojas();
+      if (data.appearance) applyRemoteAppearance(data.appearance);
       const serverPoojas = (data.poojas || []).map((item) => ({
         ...item,
         duration_hours: Math.max(1, Math.round((item.duration_minutes || 120) / 60)),
@@ -77,7 +81,7 @@ export default function Home({ navigation }) {
         ListHeaderComponent={<>
           <View style={[styles.topbar, desktop && styles.topbarDesktop]}>
             <View>
-              <Text style={styles.eyebrow}>SERVING {area.name.toUpperCase()}</Text>
+              <Text style={[styles.eyebrow, { color: tokens.accent }]}>SERVING {area.name.toUpperCase()}</Text>
               <Text style={styles.heading}>A ceremony, handled well.</Text>
               <Text style={styles.headingSub}>Discover verified Purohits or invite proposals with one clear request.</Text>
             </View>
@@ -94,8 +98,8 @@ export default function Home({ navigation }) {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
             {categories.map((item) => {
               const active = category === item;
-              return <Pressable key={item} onPress={() => setCategory(item)} style={({ pressed }) => [styles.filter, active && styles.filterActive, pressed && styles.controlPressed]}>
-                <Text style={[styles.filterText, active && styles.filterTextActive]}>{item}</Text>
+              return <Pressable key={item} onPress={() => setCategory(item)} style={({ pressed }) => [styles.filter, { borderRadius: tokens.radius }, active && { backgroundColor: tokens.primaryBg, borderColor: tokens.primaryBorder }, pressed && styles.controlPressed]}>
+                <Text style={[styles.filterText, active && { color: tokens.primaryFg }]}>{item}</Text>
               </Pressable>;
             })}
           </ScrollView>
@@ -118,7 +122,7 @@ export default function Home({ navigation }) {
                 </View>
                 <View style={styles.cardInfo}>
                   <View style={styles.categoryRow}>
-                    <Text style={styles.categoryBadgeText}>{item.category || "Ceremony"}</Text>
+                    <Text style={[styles.categoryBadgeText, { color: tokens.accent }]}>{item.category || "Ceremony"}</Text>
                   </View>
                   <Text numberOfLines={2} style={styles.name}>{item.name}</Text>
                   <View style={styles.priceContainer}>
@@ -136,7 +140,7 @@ export default function Home({ navigation }) {
                     spiritualTap();
                     navigation.navigate("PriestList", { poojaSlug: item.slug, poojaName: item.name });
                   }}
-                  style={({ pressed }) => [styles.cardActionSecondary, pressed && styles.controlPressed]}
+                  style={({ pressed }) => [styles.cardActionSecondary, { borderRadius: tokens.radius }, pressed && styles.controlPressed]}
                 >
                   <UsersRound size={14} color={colors.ink} />
                   <Text style={styles.cardActionSecondaryText}>View Purohits</Text>
@@ -149,11 +153,11 @@ export default function Home({ navigation }) {
                     spiritualTap();
                     navigation.navigate("RequestPooja", { poojaSlug: item.slug, poojaName: item.name });
                   }}
-                  style={({ pressed }) => [styles.cardActionPrimary, pressed && styles.controlPressed]}
+                  style={({ pressed }) => [styles.cardActionPrimary, { borderRadius: tokens.radius, backgroundColor: tokens.primaryBg, borderWidth: 1, borderColor: tokens.primaryBorder }, pressed && styles.controlPressed]}
                 >
-                  <FileText size={14} color={colors.white} />
-                  <Text style={styles.cardActionPrimaryText}>Get Proposals</Text>
-                  <ArrowRight size={13} color={colors.white} />
+                  <FileText size={14} color={tokens.primaryFg} />
+                  <Text style={[styles.cardActionPrimaryText, { color: tokens.primaryFg }]}>Get Proposals</Text>
+                  <ArrowRight size={13} color={tokens.primaryFg} />
                 </Pressable>
               </View>
             </Pressable>
@@ -162,12 +166,12 @@ export default function Home({ navigation }) {
         ListFooterComponent={<View>
           <Pressable style={({ pressed }) => [styles.hero, desktop && styles.heroDesktop, pressed && styles.panelPressed]} onPress={() => navigation.navigate("RequestPooja")}>
             <ImageBackground source={require("../../../assets/images/ceremony-proposal-editorial-v3.png")} style={styles.heroArtwork} imageStyle={styles.heroArtworkImage}>
-              <View style={styles.heroShade} /><View style={[styles.heroCopy, desktop && styles.heroCopyDesktop]}><Text style={styles.heroTagText}>REQUEST PROPOSALS</Text><Text style={[styles.heroTitle, desktop && styles.heroTitleDesktop]}>Invite the right purohit to your ceremony.</Text><Text style={[styles.heroBody, desktop && styles.heroBodyDesktop]}>Share the details, compare verified offers, and choose comfortably.</Text><View style={styles.heroAction}><Text style={styles.heroActionText}>Start a request</Text><ArrowRight size={17} color={colors.white} /></View></View>
+              <View style={styles.heroShade} /><View style={[styles.heroCopy, desktop && styles.heroCopyDesktop]}><Text style={[styles.heroTagText, { color: tokens.accent }]}>REQUEST PROPOSALS</Text><Text style={[styles.heroTitle, desktop && styles.heroTitleDesktop]}>Invite the right purohit to your ceremony.</Text><Text style={[styles.heroBody, desktop && styles.heroBodyDesktop]}>Share the details, compare verified offers, and choose comfortably.</Text><View style={[styles.heroAction, { borderRadius: tokens.radius, backgroundColor: tokens.primaryBg, borderWidth: 1, borderColor: tokens.primaryBorder }]}><Text style={[styles.heroActionText, { color: tokens.primaryFg }]}>Start a request</Text><ArrowRight size={17} color={tokens.primaryFg} /></View></View>
             </ImageBackground>
           </Pressable>
           <View style={styles.serviceLinks}>
-            <Pressable style={({ pressed }) => [styles.serviceLink, pressed && styles.controlPressed]} onPress={() => navigation.navigate("Chat")}><View style={styles.aiMark}><Text style={styles.om}>ॐ</Text></View><View style={{ flex: 1 }}><Text style={styles.aiEyebrow}>PUROMITRA</Text><Text style={styles.aiTitle}>Ask your pooja assistant</Text><Text style={styles.aiBody}>Get guidance on rituals and samagri.</Text></View><ArrowRight size={18} color={colors.ink} /></Pressable>
-            <Pressable style={({ pressed }) => [styles.serviceLink, pressed && styles.controlPressed]} onPress={() => navigation.navigate("RolePicker")}><View style={styles.priestInviteIcon}><UserRoundPlus size={18} color={colors.ink} /></View><View style={{ flex: 1 }}><Text style={styles.aiEyebrow}>FOR PUROHITS</Text><Text style={styles.aiTitle}>Grow your practice</Text><Text style={styles.aiBody}>Receive local ceremony requests.</Text></View><ArrowRight size={18} color={colors.ink} /></Pressable>
+            <Pressable style={({ pressed }) => [styles.serviceLink, pressed && styles.controlPressed]} onPress={() => navigation.navigate("Chat")}><View style={styles.aiMark}><Text style={[styles.om, { color: tokens.accent }]}>ॐ</Text></View><View style={{ flex: 1 }}><Text style={[styles.aiEyebrow, { color: tokens.accent }]}>PUROMITRA</Text><Text style={styles.aiTitle}>Ask your pooja assistant</Text><Text style={styles.aiBody}>Get guidance on rituals and samagri.</Text></View><ArrowRight size={18} color={colors.ink} /></Pressable>
+            <Pressable style={({ pressed }) => [styles.serviceLink, pressed && styles.controlPressed]} onPress={() => navigation.navigate("RolePicker")}><View style={styles.priestInviteIcon}><UserRoundPlus size={18} color={colors.ink} /></View><View style={{ flex: 1 }}><Text style={[styles.aiEyebrow, { color: tokens.accent }]}>FOR PUROHITS</Text><Text style={styles.aiTitle}>Grow your practice</Text><Text style={styles.aiBody}>Receive local ceremony requests.</Text></View><ArrowRight size={18} color={colors.ink} /></Pressable>
           </View>
           <View style={styles.trustRow}><ShieldCheck size={17} color={colors.success} /><Text style={styles.trustText}>Verified purohits · transparent pricing · samagri support</Text></View>
         </View>}
@@ -177,7 +181,7 @@ export default function Home({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: colors.white },
   content: { width: "100%", maxWidth: 1180, alignSelf: "center", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 110 },
   contentDesktop: { paddingHorizontal: 32 },

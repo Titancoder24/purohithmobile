@@ -1,16 +1,21 @@
 import React, { useState } from "react";
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
-import { Bell, ChevronRight, CircleHelp, Languages, LogOut, MapPin, ShieldCheck, Smartphone, Star, UserRound, WalletCards, BriefcaseBusiness, CalendarDays, Phone, X } from "lucide-react-native";
+import { bindBrandStyles } from "../../lib/brandStyles";
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Bell, ChevronRight, CircleHelp, Languages, LogOut, MapPin, Palette, ShieldCheck, Smartphone, Star, UserRound, WalletCards, BriefcaseBusiness, CalendarDays, Phone, X } from "lucide-react-native";
 import { colors, font } from "../../lib/theme";
 import { Avatar, PageHeader } from "../../components/ProductUI";
 import { useI18n } from "../../lib/i18n";
 import { useAuth } from "../../lib/auth";
 import { usePreferences } from "../../lib/preferences";
+import { APPEARANCE_PRESETS, BUTTON_SHAPES, useAppearance } from "../../lib/appearance";
 
 export default function Profile({ navigation }) {
   const { t } = useI18n();
   const { user, logout, updateProfile } = useAuth();
   const { language, area, notificationsEnabled } = usePreferences();
+  const { appearance, followingAdmin } = useAppearance();
+  const paletteLabel = APPEARANCE_PRESETS.find((item) => item.id === appearance.preset)?.label || "Custom";
+  const shapeLabel = BUTTON_SHAPES.find((item) => item.id === appearance.buttonShape)?.label || "Pill";
   const { width } = useWindowDimensions();
   const [loggingOut, setLoggingOut] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -47,6 +52,7 @@ export default function Profile({ navigation }) {
 
   const rows = [
     { icon: Smartphone, title: "Mobile number", value: user.phone ? `+91 ${user.phone}` : "Add number", onPress: openEdit },
+    { icon: Palette, title: "Appearance", value: followingAdmin ? `${paletteLabel} · admin` : `${paletteLabel} · ${shapeLabel}`, onPress: () => navigation.navigate("Settings", { section: "appearance" }) },
     { icon: Languages, title: "Language", value: language === "kn" ? "Kannada" : "English", onPress: () => navigation.navigate("Settings", { section: "language" }) },
     { icon: MapPin, title: "Service location", value: `${area.name}, Bengaluru`, onPress: () => navigation.navigate("Settings", { section: "location" }) },
     { icon: Bell, title: "Notifications", value: notificationsEnabled ? "On" : "Off", onPress: () => navigation.navigate("Settings", { section: "notifications" }) },
@@ -221,7 +227,7 @@ function SettingRow({ icon: Icon, title, value, onPress }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: colors.white },
   content: { width: "100%", maxWidth: 900, alignSelf: "center", padding: 20, paddingBottom: 56 },
   contentDesktop: { paddingHorizontal: 42, paddingTop: 20 },

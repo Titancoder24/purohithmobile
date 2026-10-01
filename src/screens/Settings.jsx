@@ -1,16 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { bindBrandStyles } from "../lib/brandStyles";
+import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, Switch, Text, View } from "react-native";
 import * as Device from "expo-device";
-import { Bell, Check, ChevronRight, CircleHelp, Crosshair, Globe2, Laptop, LocateFixed, LogOut, Mail, MapPin, MessageCircleQuestion, ShieldCheck, Smartphone } from "lucide-react-native";
+import { Bell, Check, ChevronRight, CircleHelp, Crosshair, Globe2, Laptop, LocateFixed, LogOut, Mail, MapPin, MessageCircleQuestion, Palette, ShieldCheck, Smartphone } from "lucide-react-native";
 import { colors, font } from "../lib/theme";
 import { usePreferences } from "../lib/preferences";
+import { APPEARANCE_PRESETS, BUTTON_SHAPES, BUTTON_STYLES, COLOR_SWATCHES, useAppearance } from "../lib/appearance";
 import { registerForPush } from "../lib/notifications";
 import { useAuth } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 
 export default function Settings({ route, navigation }) {
   const section = route.params?.section || "location";
-  const titles = { location: "Service location", notifications: "Notifications", devices: "Signed-in devices", support: "Help and support", language: "Language" };
+  const titles = { location: "Service location", notifications: "Notifications", devices: "Signed-in devices", support: "Help and support", language: "Language", appearance: "Appearance" };
   return <ScrollView style={styles.root} contentContainerStyle={styles.content}>
     <Text style={styles.eyebrow}>ACCOUNT SETTINGS</Text>
     <Text style={styles.title}>{titles[section]}</Text>
@@ -19,6 +21,7 @@ export default function Settings({ route, navigation }) {
     {section === "devices" ? <DeviceSettings /> : null}
     {section === "support" ? <SupportSettings navigation={navigation} /> : null}
     {section === "language" ? <LanguageSettings /> : null}
+    {section === "appearance" ? <AppearanceSettings /> : null}
   </ScrollView>;
 }
 
@@ -120,10 +123,74 @@ function LanguageSettings() {
   );
 }
 
+function AppearanceSettings() {
+  const { appearance, tokens, followingAdmin, setAppearance, resetAppearance } = useAppearance();
+  const preset = APPEARANCE_PRESETS.find((item) => item.id === appearance.preset);
+  return <>
+    <Text style={styles.lede}>This palette colors buttons, banners, chips, and highlights across the app. Purohith Connect sets the default. A choice here stays on this device.</Text>
+    <View style={styles.previewCard}>
+      <Text style={[styles.previewEyebrow, { color: tokens.accent }]}>CEREMONY</Text>
+      <Text style={styles.previewTitle}>Ayudha Puja</Text>
+      <Text style={styles.previewMeta}>Starting from ₹1,800</Text>
+      <View style={styles.previewActions}>
+        <View style={[styles.previewSecondary, { borderRadius: tokens.radius }]}><Text style={styles.previewSecondaryText}>View Purohits</Text></View>
+        <View style={[styles.previewPrimary, { borderRadius: tokens.radius, backgroundColor: tokens.primaryBg, borderColor: tokens.primaryBorder }]}><Text style={[styles.previewPrimaryText, { color: tokens.primaryFg }]}>Get Proposals</Text></View>
+      </View>
+    </View>
+    <Text style={styles.sectionTitle}>Palette</Text>
+    <View style={styles.choiceRow}>
+      {APPEARANCE_PRESETS.map((item) => {
+        const active = appearance.preset === item.id;
+        return <Pressable key={item.id} onPress={() => setAppearance({ preset: item.id, primary: item.primary, accent: item.accent })} style={[styles.swatch, active && styles.swatchActive]}>
+          <View style={[styles.swatchDot, { backgroundColor: item.primary }]} />
+          <View style={[styles.swatchAccent, { backgroundColor: item.accent }]} />
+          <Text style={styles.swatchLabel}>{item.label}</Text>
+          {active ? <Check size={14} color={item.primary} /> : null}
+        </Pressable>;
+      })}
+    </View>
+    <Text style={styles.sectionTitle}>Primary color</Text>
+    <View style={styles.choiceRow}>
+      {COLOR_SWATCHES.map((item) => {
+        const active = appearance.primary === item.hex;
+        return <Pressable key={item.id} accessibilityLabel={`${item.label} primary`} onPress={() => setAppearance({ primary: item.hex })} style={[styles.colorDot, { backgroundColor: item.hex }, active && styles.colorDotActive]} />;
+      })}
+    </View>
+    <Text style={styles.sectionTitle}>Accent color</Text>
+    <View style={styles.choiceRow}>
+      {COLOR_SWATCHES.map((item) => {
+        const active = appearance.accent === item.hex;
+        return <Pressable key={item.id} accessibilityLabel={`${item.label} accent`} onPress={() => setAppearance({ accent: item.hex })} style={[styles.colorDot, { backgroundColor: item.hex }, active && styles.colorDotActive]} />;
+      })}
+    </View>
+    <Text style={styles.sectionTitle}>Button shape</Text>
+    <View style={styles.choiceRow}>
+      {BUTTON_SHAPES.map((item) => {
+        const active = appearance.buttonShape === item.id;
+        return <Pressable key={item.id} onPress={() => setAppearance({ buttonShape: item.id })} style={[styles.choice, active && { borderColor: tokens.primary, backgroundColor: tokens.softBg }]}>
+          <View style={[styles.shapeSample, { borderRadius: Math.min(item.radius, 16), backgroundColor: active ? tokens.primary : colors.warmBorder }]} />
+          <Text style={styles.choiceLabel}>{item.label}</Text>
+        </Pressable>;
+      })}
+    </View>
+    <Text style={styles.sectionTitle}>Button style</Text>
+    <View style={styles.choiceRow}>
+      {BUTTON_STYLES.map((item) => {
+        const active = appearance.buttonStyle === item.id;
+        return <Pressable key={item.id} onPress={() => setAppearance({ buttonStyle: item.id })} style={[styles.choice, active && { borderColor: tokens.primary, backgroundColor: tokens.softBg }]}>
+          <Text style={styles.choiceLabel}>{item.label}</Text>
+        </Pressable>;
+      })}
+    </View>
+    <Text style={styles.previewNote}>{followingAdmin ? "Using the theme published from admin." : `Using your ${preset?.label || "custom"} theme on this device.`}</Text>
+    {followingAdmin ? null : <Pressable onPress={resetAppearance} style={({ pressed }) => [styles.resetTheme, pressed && styles.pressed]}><Palette size={16} color={colors.ink} /><Text style={styles.resetThemeText}>Use the admin theme</Text></Pressable>}
+  </>;
+}
+
 function ActionButton({ icon: Icon, title, onPress, loading, secondary }) { return <Pressable disabled={loading} onPress={onPress} style={({ pressed }) => [styles.actionButton, secondary && styles.actionButtonSecondary, pressed && styles.pressed]}>{loading ? <ActivityIndicator color={secondary ? colors.brandBrown : colors.white} /> : <Icon size={17} color={secondary ? colors.brandBrown : colors.white} />}<Text style={[styles.actionText, secondary && styles.actionTextSecondary]}>{title}</Text></Pressable>; }
 function InfoRow({ icon: Icon, title, body }) { return <View style={styles.infoRow}><View style={styles.rowIcon}><Icon size={17} color={colors.ink} /></View><View style={styles.rowTextCol}><Text style={styles.rowTitleText}>{title}</Text><Text style={styles.rowBodyText}>{body}</Text></View></View>; }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: colors.white }, content: { width: "100%", maxWidth: 760, alignSelf: "center", padding: 22, paddingBottom: 64 },
   eyebrow: { color: colors.brandOrangeDark, fontFamily: font.bold, fontSize: 10, letterSpacing: .7 }, title: { color: colors.ink, fontFamily: font.bold, fontSize: 30, lineHeight: 37, marginTop: 7, marginBottom: 20 }, lede: { color: colors.muted2, fontSize: 13, lineHeight: 20, marginBottom: 18 },
   summary: { minHeight: 116, borderRadius: 14, padding: 17, backgroundColor: colors.brandBrown, flexDirection: "row", alignItems: "center", gap: 13 }, summaryIcon: { width: 46, height: 46, borderRadius: 12, backgroundColor: colors.brandOrange, alignItems: "center", justifyContent: "center" }, summaryLabel: { color: "#F1CDD4", fontFamily: font.bold, fontSize: 9, letterSpacing: .5 }, summaryTitle: { color: colors.white, fontFamily: font.bold, fontSize: 17, marginTop: 4 }, summaryBody: { color: "#F4DCE1", fontSize: 10, lineHeight: 15, marginTop: 4 },
@@ -139,4 +206,27 @@ const styles = StyleSheet.create({
   infoRow: { minHeight: 76, borderBottomWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 12 }, error: { color: colors.brandBrown, fontSize: 11, marginTop: 10 }, pressed: { opacity: .76, transform: [{ translateY: 1 }] },
   deviceCard: { minHeight: 112, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 14 }, deviceIcon: { width: 52, height: 52, borderRadius: 12, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }, currentRow: { flexDirection: "row", alignItems: "center", gap: 8 }, deviceTitle: { color: colors.ink, fontFamily: font.bold, fontSize: 15 }, current: { color: colors.success, fontFamily: font.bold, fontSize: 8 }, deviceBody: { color: colors.muted2, fontSize: 11, marginTop: 5 }, deviceMeta: { color: colors.muted2, fontSize: 9, marginTop: 5 }, dangerButton: { minHeight: 54, marginTop: 22, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 10 }, dangerText: { color: colors.brandBrown, fontFamily: font.semibold, fontSize: 13 },
   contactGrid: { flexDirection: "row", gap: 10 }, contactCard: { flex: 1, minHeight: 128, borderWidth: 1, borderColor: colors.warmBorder, borderRadius: 12, padding: 15, justifyContent: "center" }, contactTitle: { color: colors.ink, fontFamily: font.bold, fontSize: 13, marginTop: 12 }, contactBody: { color: colors.muted2, fontSize: 10, lineHeight: 15, marginTop: 4 }, faq: { borderBottomWidth: 1, borderColor: colors.warmBorder, paddingVertical: 15 }, faqHead: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 10 }, faqBody: { color: colors.muted2, fontSize: 11, lineHeight: 18, paddingLeft: 28, paddingTop: 8 },
+  previewCard: { borderWidth: 1, borderColor: colors.warmBorder, borderRadius: 16, padding: 14, backgroundColor: colors.white },
+  previewEyebrow: { fontFamily: font.bold, fontSize: 10, letterSpacing: .6 },
+  previewTitle: { color: colors.ink, fontFamily: font.bold, fontSize: 18, marginTop: 4 },
+  previewMeta: { color: colors.muted2, fontSize: 12, marginTop: 4 },
+  previewActions: { flexDirection: "row", gap: 8, marginTop: 14 },
+  previewSecondary: { flex: 1, minHeight: 38, borderWidth: 1, borderColor: "#E2DDD5", backgroundColor: "#FBF9F5", alignItems: "center", justifyContent: "center" },
+  previewSecondaryText: { color: colors.ink, fontFamily: font.bold, fontSize: 12 },
+  previewPrimary: { flex: 1.15, minHeight: 38, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  previewPrimaryText: { fontFamily: font.bold, fontSize: 12 },
+  choiceRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  swatch: { minHeight: 40, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.white },
+  swatchActive: { borderColor: colors.ink },
+  swatchDot: { width: 14, height: 14, borderRadius: 7 },
+  swatchAccent: { width: 8, height: 8, borderRadius: 4 },
+  swatchLabel: { color: colors.ink, fontFamily: font.semibold, fontSize: 12 },
+  colorDot: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: colors.white },
+  colorDotActive: { borderColor: colors.ink },
+  choice: { minHeight: 64, minWidth: 92, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.warmBorder, alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.white },
+  shapeSample: { width: 36, height: 14 },
+  choiceLabel: { color: colors.ink, fontFamily: font.semibold, fontSize: 12 },
+  previewNote: { color: colors.muted2, fontSize: 12, lineHeight: 18, marginTop: 18 },
+  resetTheme: { minHeight: 48, marginTop: 10, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.warmBorder, flexDirection: "row", alignItems: "center", gap: 10 },
+  resetThemeText: { color: colors.ink, fontFamily: font.semibold, fontSize: 13 },
 });

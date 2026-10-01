@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, FlatList, TextInput, Pressable, KeyboardAvoidingView, Platform, Modal, ScrollView } from "react-native";
+import { bindBrandStyles } from "../../lib/brandStyles";
+import { View, Text, FlatList, TextInput, Pressable, KeyboardAvoidingView, Platform, Modal, ScrollView } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Clock3, Menu, Plus, Sparkles, Send, X } from "lucide-react-native";
 import { colors, radii, spacing, font } from "../../lib/theme";
@@ -235,7 +236,7 @@ export default function Chat({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   header: {
     flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: spacing.xl, paddingVertical: spacing.lg,
     backgroundColor: colors.white, borderBottomWidth: 1, borderColor: colors.warmBorder,

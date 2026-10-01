@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { bindBrandStyles } from "../../lib/brandStyles";
+import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import Svg, { Circle, Defs, LinearGradient, Path, Stop } from "react-native-svg";
 import { CalendarCheck2, CalendarClock, Check, ChevronRight, Clock3, MapPin, MessageSquareText, Phone, ReceiptText, ShieldCheck, WalletCards } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -98,7 +99,7 @@ function BookingRow({ booking, navigation, onAction }) {
   </View>;
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: colors.white }, content: { padding: 20, paddingBottom: 40 }, topline: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginTop: 6 }, kicker: { color: colors.saffron, fontSize: 10, fontWeight: "700", letterSpacing: .8 }, greeting: { color: colors.ink, fontSize: 31, lineHeight: 37, fontWeight: "700", marginTop: 6 }, helper: { color: colors.muted2, fontSize: 13, marginTop: 5, maxWidth: 290, lineHeight: 18 }, availabilityButton: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", backgroundColor: colors.brandBrown },
   revenueSurface: { backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.warmBorder, marginTop: 22, padding: 20, overflow: "hidden" }, revenueTop: { flexDirection: "row", justifyContent: "space-between" }, revenueLabel: { color: colors.muted2, fontSize: 10, fontWeight: "700", letterSpacing: .7 }, revenueValue: { color: colors.ink, fontSize: 38, fontWeight: "700", marginTop: 7 }, revenueMeta: { color: colors.muted2, fontSize: 11, marginTop: 4 }, revenueIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: "#FFF0EA", alignItems: "center", justifyContent: "center" }, chartWrap: { marginTop: 18, paddingTop: 16, borderTopWidth: 1, borderColor: colors.warmBorder }, chartCaption: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, chartTitle: { color: colors.ink, fontSize: 11, fontWeight: "700" }, chartValue: { color: colors.muted2, fontSize: 10 }, chartLabels: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 4, marginTop: -6 }, chartDay: { color: colors.muted2, fontSize: 9, fontWeight: "700" },
   stats: { flexDirection: "row", gap: 0, marginTop: 8, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.warmBorder }, stat: { flex: 1, minHeight: 94, paddingVertical: 14, paddingHorizontal: 9, borderRightWidth: 1, borderColor: colors.warmBorder }, statIcon: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#F5F5F3" }, statLabel: { color: colors.muted2, fontSize: 10, lineHeight: 13, marginTop: 9 }, statValue: { color: colors.ink, fontSize: 18, fontWeight: "700", marginTop: 2 },

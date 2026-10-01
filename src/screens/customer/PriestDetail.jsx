@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Image, ActivityIndicator, useWindowDimensions } from "react-native";
+import { bindBrandStyles } from "../../lib/brandStyles";
+import { View, Text, ScrollView, Image, ActivityIndicator, useWindowDimensions } from "react-native";
 import { Star, ShieldCheck, Languages, MapPin, Clock3, Send } from "lucide-react-native";
 import { colors, spacing, font } from "../../lib/theme";
 import { Button, Card } from "../../components/UI";
@@ -134,7 +135,7 @@ function labelFromSlug(slug) {
   return String(slug || "").split("-").map((part) => part ? part[0].toUpperCase() + part.slice(1) : part).join(" ");
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   notOfferedBanner: {
     backgroundColor: "#FFF8F0",
     borderBottomWidth: 1,

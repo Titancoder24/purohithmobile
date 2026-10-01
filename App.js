@@ -1,4 +1,4 @@
-import React, { Component, useEffect, useRef, useState } from "react";
+import React, { Component, useEffect, useMemo, useRef, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { NavigationContainer, DefaultTheme, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -14,6 +14,8 @@ import { colors, font } from "./src/lib/theme";
 import { useI18n } from "./src/lib/i18n";
 import { isWeb, webMaxWidth } from "./src/lib/webLayout";
 import { PreferencesProvider } from "./src/lib/preferences";
+import { AppearanceProvider, useAppearance } from "./src/lib/appearance";
+import { bindBrandStyles } from "./src/lib/brandStyles";
 import AppTopBar from "./src/components/AppTopBar";
 import BrandLogo from "./src/components/BrandLogo";
 import DAPWidget from "./src/components/DAPWidget";
@@ -66,10 +68,12 @@ class WidgetBoundary extends Component {
   }
 }
 
-const navTheme = {
-  ...DefaultTheme,
-  colors: { ...DefaultTheme.colors, background: colors.cotton, primary: colors.brandOrange, card: colors.white, text: colors.ink, border: colors.warmBorder },
-};
+function navigationTheme(accent) {
+  return {
+    ...DefaultTheme,
+    colors: { ...DefaultTheme.colors, background: colors.cotton, primary: accent, card: colors.white, text: colors.ink, border: colors.warmBorder },
+  };
+}
 
 // Deep-link config: purohith://booking/<id>, purohith://priests
 const linking = {
@@ -103,6 +107,7 @@ const linking = {
 };
 
 function TabIcon({ focused, Icon }) {
+  const { tokens } = useAppearance();
   const scale = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     Animated.sequence([
@@ -111,8 +116,8 @@ function TabIcon({ focused, Icon }) {
     ]).start();
   }, [focused, scale]);
   return <Animated.View style={[styles.tabIcon, { transform: [{ scale }] }]}> 
-    <Icon size={24} color={focused ? colors.brandOrangeDark : "#70706C"} strokeWidth={focused ? 2.7 : 2.1} />
-    <View style={[styles.tabDot, focused && styles.tabDotActive]} />
+    <Icon size={24} color={focused ? tokens.accent : "#70706C"} strokeWidth={focused ? 2.7 : 2.1} />
+    <View style={[styles.tabDot, focused && { backgroundColor: tokens.accent }]} />
   </Animated.View>;
 }
 
@@ -171,7 +176,7 @@ function PriestTabs() {
   );
 }
 
-const styles = {
+const styles = bindBrandStyles({
   tabBar: { backgroundColor: colors.white, borderTopColor: colors.warmBorder, borderTopWidth: 1, height: Platform.OS === "ios" ? 82 : 72, paddingBottom: Platform.OS === "ios" ? 18 : 8, paddingTop: 7, elevation: 0, shadowOpacity: 0 },
   tabBarItem: { alignItems: "center", justifyContent: "center", paddingTop: 0, paddingBottom: 0, ...(Platform.OS === "web" ? { outlineStyle: "none" } : {}) },
   sceneDesktop: { paddingTop: 70, backgroundColor: colors.white },
@@ -189,10 +194,12 @@ const styles = {
   splashSub: { marginTop: 6, color: colors.muted2, fontSize: 12, lineHeight: 17, fontWeight: "600", textAlign: "center" },
   splashLine: { width: 164, height: 4, overflow: "hidden", borderRadius: 8, marginTop: 22, backgroundColor: "#F0EAE3" },
   splashLineFill: { flex: 1, borderRadius: 8, backgroundColor: colors.brandOrange },
-};
+});
 
 function Router() {
   const { ready, user, role } = useAuth();
+  const { tokens } = useAppearance();
+  const navTheme = useMemo(() => navigationTheme(tokens.accent), [tokens.accent]);
   const routeNameRef = useRef();
 
   // Register for push notifications once we have an authenticated user.
@@ -368,9 +375,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <PreferencesProvider>
+      <AppearanceProvider>
       <AuthProvider>
         <AuthAppFrame />
       </AuthProvider>
+      </AppearanceProvider>
       </PreferencesProvider>
     </SafeAreaProvider>
   );

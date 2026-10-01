@@ -1,5 +1,6 @@
 import React from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { bindBrandStyles } from "../lib/brandStyles";
+import { Platform, View } from "react-native";
 import { WebView } from "react-native-webview";
 import { isValidCoordinate, mapplsConfig } from "../lib/maps";
 
@@ -201,7 +202,7 @@ export default function MapplsMap({ latitude, longitude, title, address, style }
   );
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   map: {
     width: "100%",
     minHeight: 320,

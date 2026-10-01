@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { bindBrandStyles } from "../../lib/brandStyles";
+import { Alert, Pressable, Text, View } from "react-native";
 import * as Location from "expo-location";
 import { LocateFixed, Navigation, ShieldCheck, Square } from "lucide-react-native";
 import { colors, radii, spacing } from "../../lib/theme";
@@ -53,7 +54,7 @@ export default function ShareLocation({ route, navigation }) {
   </View>;
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: colors.white }, body: { flex: 1, padding: 20 },
   eyebrow: { fontSize: 10, color: colors.saffron, fontWeight: "700", letterSpacing: .7 }, title: { fontSize: 30, lineHeight: 36, color: colors.ink, fontWeight: "700", marginTop: 5 }, subtitle: { color: colors.muted2, fontSize: 13, marginTop: 6, marginBottom: 20 },
   map: { borderRadius: radii.xl, overflow: "hidden", borderWidth: 1, borderColor: colors.warmBorder },

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TextInput, Alert, Pressable, Platform, ActivityIndicator, useWindowDimensions } from "react-native";
+import { bindBrandStyles } from "../../lib/brandStyles";
+import { View, Text, ScrollView, TextInput, Alert, Pressable, Platform, ActivityIndicator, useWindowDimensions } from "react-native";
 import { Check, Download, Info, Send, ShieldCheck, UserRound, WalletCards } from "lucide-react-native";
 import { colors, radii, spacing, font, shadow } from "../../lib/theme";
 import { Button, Card, Field } from "../../components/UI";
@@ -461,7 +462,7 @@ function withTimeout(promise, timeoutMs) {
   ]);
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   loadState: { flex: 1, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", padding: spacing.xl },
   loadTitle: { color: colors.ink, fontSize: 20, lineHeight: 26, fontWeight: "800", marginTop: 14, textAlign: "center" },
   loadBody: { maxWidth: 360, color: colors.muted2, fontSize: 13, lineHeight: 20, marginTop: 7, marginBottom: 12, textAlign: "center" },

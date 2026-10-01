@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { bindBrandStyles } from "../lib/brandStyles";
+import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { ArrowLeft, Phone, Send, ShieldCheck } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -208,7 +209,7 @@ export default function Conversation({ route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: colors.white },
   header: { minHeight: 72, paddingHorizontal: spacing.lg, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.white, borderBottomWidth: 1, borderColor: colors.warmBorder },
   iconBtn: { width: 40, height: 40, borderWidth: 1, borderColor: colors.warmBorder, borderRadius: 20, alignItems: "center", justifyContent: "center" },

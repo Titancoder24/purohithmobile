@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { bindBrandStyles } from "../../lib/brandStyles";
+import { Alert, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Clock3 } from "lucide-react-native";
 import { colors, font } from "../../lib/theme";
 import { Button } from "../../components/UI";
@@ -128,7 +129,7 @@ export default function Availability() {
   </ScrollView>;
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: colors.white },
   content: { width: "100%", maxWidth: 980, alignSelf: "center", padding: 20, paddingBottom: 48 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingTop: 6 },

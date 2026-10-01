@@ -11,6 +11,10 @@ export async function fetchMarketplacePoojas() {
   return invokeMarketplace({ kind: "poojas" });
 }
 
+export async function fetchMarketplaceSettings() {
+  return invokeMarketplace({ kind: "settings" });
+}
+
 export async function fetchMarketplacePriests(filters = {}) {
   return invokeMarketplace({ kind: "priests", ...filters });
 }

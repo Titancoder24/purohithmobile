@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
+import { bindBrandStyles } from "../lib/brandStyles";
+import { View, Text, ActivityIndicator } from "react-native";
 import { colors, font } from "../lib/theme";
 import { t } from "../lib/i18n";
 
@@ -11,7 +12,7 @@ export default function LoadingScreen({ label }) {
     </View>
   );
 }
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.cotton, gap: 12 },
   txt: { color: colors.muted2, fontSize: font.sizes.sm },
 });

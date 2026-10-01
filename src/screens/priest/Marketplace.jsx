@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { bindBrandStyles } from "../../lib/brandStyles";
+import { Alert, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 import { BadgeIndianRupee, Check, Clock3, MapPin, Navigation, Send, Sparkles } from "lucide-react-native";
 import { colors } from "../../lib/theme";
 import { useAuth } from "../../lib/auth";
@@ -115,7 +116,7 @@ export default function Marketplace() {
   </>;
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: colors.white }, content: { padding: 20, paddingBottom: 40 },
   hero: { flexDirection: "row", gap: 14, paddingVertical: 12, paddingBottom: 24, borderBottomWidth: 1, borderColor: colors.warmBorder },
   heroIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#FFF1EB", alignItems: "center", justifyContent: "center" },

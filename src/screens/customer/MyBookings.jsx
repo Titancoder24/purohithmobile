@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, StyleSheet, FlatList, RefreshControl, Modal, Pressable, TextInput, ScrollView, Alert, Image } from "react-native";
+import { bindBrandStyles } from "../../lib/brandStyles";
+import { View, Text, FlatList, RefreshControl, Modal, Pressable, TextInput, ScrollView, Alert, Image } from "react-native";
 import { CalendarDays, ChevronRight, LocateFixed, MapPin, MessageSquareText, Phone, Sparkles, ArrowRight, Plus } from "lucide-react-native";
 import { colors, radii, spacing, font } from "../../lib/theme";
 import { Button, Field } from "../../components/UI";
@@ -438,7 +439,7 @@ function Sheet({ visible, onClose, title, children }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   header: { marginBottom: spacing.xl, paddingTop: 12 },
   headerCopy: { marginBottom: 4 },
   headerKicker: { color: colors.saffron, fontSize: 10, fontWeight: "700", letterSpacing: .8 },

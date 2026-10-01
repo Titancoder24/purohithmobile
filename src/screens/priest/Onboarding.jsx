@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { bindBrandStyles } from "../../lib/brandStyles";
+import { Alert, Image, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import { decode } from "base64-arraybuffer";
@@ -281,7 +282,7 @@ function ServiceAreaPicker({ query, setQuery, open, setOpen, values, selected, e
   </View>;
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: colors.white }, content: { width: "100%", maxWidth: 980, alignSelf: "center", padding: 20, paddingBottom: 64 }, contentDesktop: { paddingHorizontal: 42, paddingTop: 32 },
   header: { flexDirection: "row", alignItems: "flex-start", gap: 18 }, headerCopy: { flex: 1, minWidth: 0 }, kicker: { color: colors.brandOrangeDark, fontFamily: font.bold, fontSize: 10, letterSpacing: .8 }, h1: { color: colors.ink, fontFamily: font.bold, fontSize: 30, lineHeight: 37, marginTop: 7 }, sub: { color: colors.muted2, fontSize: 13, lineHeight: 19, marginTop: 6, maxWidth: 560 },
   completion: { width: 76, height: 76, borderRadius: 38, alignItems: "center", justifyContent: "center", backgroundColor: colors.brandTint, borderWidth: 1, borderColor: "#F3C9B0" }, completionValue: { color: colors.brandBrown, fontFamily: font.bold, fontSize: 18 }, completionLabel: { color: colors.muted2, fontSize: 9, marginTop: 2 }, progressTrack: { height: 4, borderRadius: 2, overflow: "hidden", backgroundColor: "#F0E5E2", marginTop: 22 }, progressFill: { height: 4, borderRadius: 2, backgroundColor: colors.brandOrange },

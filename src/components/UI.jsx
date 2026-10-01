@@ -1,16 +1,21 @@
 import React, { useRef } from "react";
+import { bindBrandStyles } from "../lib/brandStyles";
 import { Animated, Platform, View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { colors, radii, font, spacing } from "../lib/theme";
 import { spiritualTap } from "../lib/spiritualSounds";
+import { useAppearance } from "../lib/appearance";
 
 export function Button({ title, onPress, variant = "primary", disabled, loading, testID, style, icon: Icon }) {
+  const { tokens } = useAppearance();
   const press = useRef(new Animated.Value(0)).current;
+  const themed = variant === "primary" || variant === "outline" || variant === "ghost";
   const bg = disabled ? colors.warmBorder :
-    variant === "primary" ? colors.brandBrown :
+    variant === "primary" ? tokens.primaryBg :
     variant === "danger" ? colors.danger :
     variant === "ghost" ? "transparent" : colors.white;
-  const fg = variant === "outline" || variant === "ghost" ? colors.brandBrown : colors.white;
-  const border = variant === "outline" ? { borderWidth: 1, borderColor: "#D7A9B2" } : {};
+  const fg = variant === "outline" || variant === "ghost" ? tokens.primary : variant === "primary" ? tokens.primaryFg : colors.white;
+  const border = variant === "outline" ? { borderWidth: 1, borderColor: tokens.primary } : variant === "primary" && tokens.buttonStyle !== "solid" ? { borderWidth: 1, borderColor: tokens.primaryBorder } : {};
+  const radius = themed ? tokens.radius : radii.md;
   const dimensional = variant === "primary" || variant === "danger";
   const animate = (toValue) => Animated.spring(press, { toValue, speed: 32, bounciness: toValue ? 0 : 7, useNativeDriver: true }).start();
   const animatedStyle = { transform: [{ scale: press.interpolate({ inputRange: [0, 1], outputRange: [1, .975] }) }] };
@@ -34,8 +39,8 @@ export function Button({ title, onPress, variant = "primary", disabled, loading,
         marginLeft: extra.marginLeft,
         marginRight: extra.marginRight,
         padding: "0 20px",
-        borderRadius: radii.md,
-        border: variant === "outline" ? "1px solid #D7A9B2" : "1px solid transparent",
+        borderRadius: radius,
+        border: variant === "outline" ? `1px solid ${tokens.primary}` : variant === "primary" && tokens.buttonStyle !== "solid" ? `1px solid ${tokens.primaryBorder}` : "1px solid transparent",
         background: bg,
         color: fg,
         display: "inline-flex",
@@ -46,7 +51,7 @@ export function Button({ title, onPress, variant = "primary", disabled, loading,
         opacity: disabled || loading ? .65 : 1,
         fontSize: font.sizes.base,
         fontWeight: 700,
-        boxShadow: dimensional ? `0 4px 9px ${variant === "danger" ? "#7F1D1D33" : `${colors.brandBrownDark}33`}` : "none",
+        boxShadow: dimensional ? `0 4px 9px ${variant === "danger" ? "#7F1D1D33" : `${tokens.primary}33`}` : "none",
       }}
     >{loading ? "Loading..." : <>{Icon ? <Icon size={18} color={fg} strokeWidth={2.2} /> : null}<span>{title}</span></>}</div>;
   }
@@ -59,7 +64,7 @@ export function Button({ title, onPress, variant = "primary", disabled, loading,
       onPressIn={() => animate(1)}
       onPressOut={() => animate(0)}
       disabled={disabled || loading}
-      style={({ pressed }) => [styles.btn, dimensional && styles.dimensional, variant === "danger" && styles.dangerDepth, { backgroundColor: bg, opacity: pressed ? 0.9 : 1 }, pressed && dimensional && styles.dimensionalPressed, border]}>
+      style={({ pressed }) => [styles.btn, dimensional && styles.dimensional, variant === "danger" && styles.dangerDepth, { backgroundColor: bg, borderRadius: radius, opacity: pressed ? 0.9 : 1 }, pressed && dimensional && styles.dimensionalPressed, border]}>
       {loading ? <ActivityIndicator color={fg} /> : <>
         {Icon ? <Icon size={18} color={fg} strokeWidth={2.2} /> : null}
         <Text style={[styles.btnTxt, { color: fg }]}>{title}</Text>
@@ -75,7 +80,7 @@ export function Card({ children, style, testID }) {
 export function Pill({ label, tone = "neutral", style }) {
   const palette = {
     neutral: { bg: colors.muted, fg: colors.muted2 },
-    saffron: { bg: "#FED7AA", fg: colors.saffronDark },
+    saffron: { bg: colors.accentTint, fg: colors.saffronDark },
     green: { bg: "#DCFCE7", fg: colors.success },
     blue: { bg: "#DBEAFE", fg: colors.info },
     danger: { bg: "#FEE2E2", fg: colors.danger },
@@ -110,7 +115,7 @@ export function Field({ label, required = false, children, style }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   btn: {
     minHeight: 52, borderRadius: radii.md, alignItems: "center", justifyContent: "center", paddingHorizontal: 20,
     flexDirection: "row", gap: 9,

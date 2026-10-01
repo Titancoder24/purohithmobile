@@ -1,15 +1,6 @@
 import React, { useRef } from "react";
-import {
-  ActivityIndicator,
-  Animated,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { bindBrandStyles } from "../lib/brandStyles";
+import { ActivityIndicator, Animated, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import {
   ArrowLeft,
   ArrowRight,
@@ -20,6 +11,7 @@ import {
 } from "lucide-react-native";
 import { colors, font, radii, spacing, type } from "../lib/theme";
 import { spiritualTap } from "../lib/spiritualSounds";
+import { useAppearance } from "../lib/appearance";
 
 export function Screen({ children, style }) {
   return <View style={[styles.screen, style]}>{children}</View>;
@@ -107,8 +99,12 @@ export function IconButton({ icon: Icon, label, onPress, inverse = false, danger
 }
 
 export function PrimaryButton({ title, onPress, icon: Icon, disabled, loading, tone = "dark", style, testID }) {
+  const { tokens } = useAppearance();
   const inverse = tone === "light";
   const accent = tone === "accent";
+  const themed = !inverse && !accent;
+  const backgroundColor = inverse ? colors.white : accent ? tokens.accent : tokens.primaryBg;
+  const foreground = themed ? tokens.primaryFg : inverse ? colors.ink : colors.white;
   const press = useRef(new Animated.Value(0)).current;
   const animate = (toValue) => Animated.spring(press, { toValue, speed: 32, bounciness: toValue ? 0 : 7, useNativeDriver: true }).start();
   const animatedStyle = { transform: [{ scale: press.interpolate({ inputRange: [0, 1], outputRange: [1, .975] }) }] };
@@ -123,16 +119,15 @@ export function PrimaryButton({ title, onPress, icon: Icon, disabled, loading, t
       onPress={(event) => { spiritualTap(); onPress?.(event); }}
       style={({ pressed }) => [
         styles.primaryButton,
-        inverse && styles.primaryButtonLight,
-        accent && styles.primaryButtonAccent,
+        { backgroundColor, borderRadius: inverse ? 10 : tokens.radius, borderWidth: inverse || (themed && tokens.buttonStyle === "outline") ? 1 : 0, borderColor: inverse ? colors.warmBorder : tokens.primaryBorder },
         (disabled || loading) && styles.disabled,
         pressed && styles.buttonPressed,
       ]}
     >
-      {loading ? <ActivityIndicator color={inverse ? colors.ink : colors.white} /> : (
+      {loading ? <ActivityIndicator color={foreground} /> : (
         <>
-          <Text style={[styles.primaryButtonText, inverse && styles.primaryButtonTextLight]}>{title}</Text>
-          {Icon ? <Icon size={18} color={inverse ? colors.ink : colors.white} /> : null}
+          <Text style={[styles.primaryButtonText, { color: foreground }]}>{title}</Text>
+          {Icon ? <Icon size={18} color={foreground} /> : null}
         </>
       )}
     </Pressable></Animated.View>
@@ -154,15 +149,16 @@ export function TextButton({ title, onPress, icon: Icon = ArrowRight, danger = f
 }
 
 export function SegmentedControl({ options, value, onChange, style }) {
+  const { tokens } = useAppearance();
   return (
-    <View style={[styles.segmented, style]}>
+    <View style={[styles.segmented, { borderRadius: tokens.radius }, style]}>
       {options.map((option) => {
         const key = typeof option === "string" ? option : option.value;
         const label = typeof option === "string" ? option : option.label;
         const active = key === value;
         return (
-          <Pressable key={key} onPress={() => onChange(key)} style={[styles.segment, active && styles.segmentActive]}>
-            <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
+          <Pressable key={key} onPress={() => onChange(key)} style={[styles.segment, { borderRadius: Math.max(4, tokens.radius - 4) }, active && styles.segmentActive, active && { backgroundColor: tokens.primaryBg }]}>
+            <Text style={[styles.segmentText, active && styles.segmentTextActive, active && { color: tokens.primaryFg }]}>{label}</Text>
           </Pressable>
         );
       })}
@@ -171,15 +167,16 @@ export function SegmentedControl({ options, value, onChange, style }) {
 }
 
 export function Chip({ label, selected, onPress, icon: Icon, style }) {
+  const { tokens } = useAppearance();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected: Boolean(selected) }}
       onPress={onPress}
-      style={({ pressed }) => [styles.chip, selected && styles.chipSelected, pressed && styles.pressed, style]}
+      style={({ pressed }) => [styles.chip, { borderRadius: tokens.radius }, selected && { backgroundColor: tokens.primaryBg, borderColor: tokens.primaryBorder }, pressed && styles.pressed, style]}
     >
-      {Icon ? <Icon size={14} color={selected ? colors.white : colors.ink} /> : null}
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+      {Icon ? <Icon size={14} color={selected ? tokens.primaryFg : colors.ink} /> : null}
+      <Text style={[styles.chipText, selected && { color: tokens.primaryFg }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -277,7 +274,7 @@ export function Divider({ inset = 0, style }) {
   return <View style={[styles.divider, { marginLeft: inset }, style]} />;
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   screen: { flex: 1, backgroundColor: colors.white },
   pageContent: { width: "100%", maxWidth: 960, alignSelf: "center", paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: 48 },
   pageHeader: { flexDirection: "row", alignItems: "flex-start", gap: 16, paddingTop: 4, paddingBottom: 18 },

@@ -1,9 +1,11 @@
 import React, { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { bindBrandStyles } from "../lib/brandStyles";
+import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { Check, ChevronDown, MapPin, X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { colors, spacing } from "../lib/theme";
+import { useAppearance } from "../lib/appearance";
 import { usePreferences } from "../lib/preferences";
 import { useAuth } from "../lib/auth";
 import BrandLogo from "./BrandLogo";
@@ -13,6 +15,7 @@ export default function AppTopBar({ showLocation = true }) {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { language, area, setArea, areas } = usePreferences();
+  const { tokens } = useAppearance();
   const [open, setOpen] = useState(false);
 
   const isPriest = user?.role === "priest";
@@ -32,7 +35,7 @@ export default function AppTopBar({ showLocation = true }) {
         </View>
         {showLocation ? (
           <Pressable style={styles.centerLocation} onPress={() => setOpen(true)}>
-            <View style={styles.pinTile}><MapPin size={13} color={colors.saffron} /></View>
+            <View style={[styles.pinTile, { backgroundColor: tokens.softBg }]}><MapPin size={13} color={tokens.accent} /></View>
             <View style={styles.locationCopy}>
               <Text style={styles.label}>{isPriest ? "SERVING AREA" : "SERVICE LOCATION"}</Text>
               <Text numberOfLines={1} style={styles.value}>{area.name}</Text>
@@ -41,8 +44,8 @@ export default function AppTopBar({ showLocation = true }) {
           </Pressable>
         ) : <View style={{ flex: 1 }} />}
         <View style={styles.sideSlotRight}>
-          <Pressable accessibilityLabel="Language settings" onPress={() => navigation.navigate("Settings", { section: "language" })} style={styles.language}>
-            <Text style={styles.languageText}>{language === "kn" ? "KN" : "EN"}</Text>
+          <Pressable accessibilityLabel="Language settings" onPress={() => navigation.navigate("Settings", { section: "language" })} style={[styles.language, { backgroundColor: tokens.softBg, borderColor: tokens.primary }]}>
+            <Text style={[styles.languageText, { color: tokens.primary }]}>{language === "kn" ? "KN" : "EN"}</Text>
           </Pressable>
         </View>
       </View>
@@ -87,7 +90,7 @@ export default function AppTopBar({ showLocation = true }) {
   </>;
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   wrapper: { width: "100%", backgroundColor: colors.white, borderBottomWidth: 1, borderColor: colors.warmBorder },
   bar: { width: "100%", maxWidth: 1180, height: 54, alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg },
   sideSlotLeft: { minWidth: 44, alignItems: "flex-start", justifyContent: "center" },

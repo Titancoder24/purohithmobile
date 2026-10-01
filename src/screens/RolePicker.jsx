@@ -1,4 +1,5 @@
 import React from "react";
+import { bindBrandStyles } from "../lib/brandStyles";
 import { View, Text, StyleSheet, Pressable, SafeAreaView, Image, useWindowDimensions } from "react-native";
 import { ArrowRight, House, BookOpen, Sparkles, ShieldCheck } from "lucide-react-native";
 import { colors, radii, spacing } from "../lib/theme";
@@ -54,7 +55,7 @@ function RoleButton({ Icon, title, subtitle, onPress, primary, testID }) {
   </Pressable>;
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: colors.cotton },
   shell: { flex: 1, width: "100%", maxWidth: 1260, alignSelf: "center" },
   shellDesktop: { flexDirection: "row", alignItems: "stretch", padding: 28, gap: 28 },

@@ -1,5 +1,6 @@
 import React from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { bindBrandStyles } from "../lib/brandStyles";
+import { Modal, Pressable, Text, View } from "react-native";
 import { MapPin, Navigation, X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radii, spacing } from "../lib/theme";
@@ -48,7 +49,7 @@ export default function MapplsDrawer({ visible, onClose, location }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,.48)" },
   sheet: { width: "100%", maxWidth: 760, alignSelf: "center", maxHeight: "90%", paddingHorizontal: spacing.lg, paddingTop: 12, borderTopLeftRadius: 26, borderTopRightRadius: 26, backgroundColor: colors.white },
   handle: { width: 44, height: 4, borderRadius: 2, alignSelf: "center", backgroundColor: "#DED8CE", marginBottom: 12 },

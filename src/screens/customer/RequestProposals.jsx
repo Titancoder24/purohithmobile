@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { bindBrandStyles } from "../../lib/brandStyles";
 import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -616,7 +617,7 @@ function TimelineStep({ label, done, last }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: colors.white },
   content: { width: "100%", maxWidth: 1040, alignSelf: "center", padding: 20, paddingBottom: 48 },
   header: { paddingTop: 6, paddingBottom: 18, borderBottomWidth: 1, borderColor: colors.warmBorder },

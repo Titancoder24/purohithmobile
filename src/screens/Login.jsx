@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
+import { bindBrandStyles } from "../lib/brandStyles";
+import { View, Text, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
 import { ArrowLeft, Mail, UserRound, ShieldCheck, KeyRound } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radii, spacing, font } from "../lib/theme";
@@ -296,7 +297,7 @@ export default function Login() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = bindBrandStyles({
   body: { width: "100%", maxWidth: 560, alignSelf: "center", paddingHorizontal: 24, paddingBottom: 48, gap: spacing.md, backgroundColor: colors.white, minHeight: "100%" },
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   back: { width: 44, height: 44, borderWidth: 1, borderColor: "#E4C8CE", borderRadius: 22, alignItems: "center", justifyContent: "center" },

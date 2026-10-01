@@ -1,3 +1,5 @@
+import { bindBrandStyles } from "./brandStyles";
+
 // Purohith Connect — theme tokens (mirrors /app/frontend/tailwind/CSS vars).
 export const colors = {
   brandBrown: "#8F1028",
@@ -18,6 +20,7 @@ export const colors = {
   danger: "#B91C1C",
   success: "#15803D",
   info: "#1D4ED8",
+  accentTint: "#FDE8DF",
 };
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 };
@@ -32,7 +35,7 @@ export const font = {
   sizes: { xs: 11, sm: 13, base: 15, lg: 17, xl: 20, h2: 24, h1: 30 },
 };
 
-export const type = {
+export const type = bindBrandStyles({
   display: { fontFamily: font.semibold, fontSize: 30, lineHeight: 36, color: colors.ink },
   title: { fontFamily: font.semibold, fontSize: 24, lineHeight: 30, color: colors.ink },
   section: { fontFamily: font.semibold, fontSize: 19, lineHeight: 24, color: colors.ink },
@@ -40,9 +43,9 @@ export const type = {
   secondary: { fontFamily: font.regular, fontSize: 12, lineHeight: 18, color: colors.muted2 },
   label: { fontFamily: font.semibold, fontSize: 12, lineHeight: 16, color: colors.ink },
   eyebrow: { fontFamily: font.bold, fontSize: 10, lineHeight: 14, color: colors.saffron, letterSpacing: .7 },
-};
+});
 
-export const shadow = {
+export const shadow = bindBrandStyles({
   card: {
     shadowColor: "#000000",
     shadowOffset: { width: 0, height: 1 },
@@ -57,10 +60,10 @@ export const shadow = {
     shadowRadius: 10,
     elevation: 3,
   },
-};
+});
 
 // Status pill styles (matches web STATUS_STYLES).
-export const statusPill = {
+export const statusPill = bindBrandStyles({
   pending: { bg: "#FEF3C7", fg: "#B45309" },
   confirmed: { bg: "#FED7AA", fg: "#C2410C" },
   completed: { bg: "#DCFCE7", fg: "#166534" },
@@ -71,4 +74,4 @@ export const statusPill = {
   open: { bg: "#FEF3C7", fg: "#B45309" },
   in_review: { bg: "#DBEAFE", fg: "#1D4ED8" },
   resolved: { bg: "#DCFCE7", fg: "#166534" },
-};
+});
