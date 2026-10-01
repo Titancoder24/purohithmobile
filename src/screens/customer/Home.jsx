@@ -29,7 +29,7 @@ export default function Home({ navigation }) {
   const isTablet = width >= 600 && width < 900;
   const columns = desktop ? 3 : isTablet ? 2 : 1;
   const { area } = usePreferences();
-  const { tokens, applyRemoteAppearance } = useAppearance();
+  const { tokens } = useAppearance();
   const [poojas, setPoojas] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
@@ -38,7 +38,6 @@ export default function Home({ navigation }) {
   const load = async () => {
     try {
       const data = await fetchMarketplacePoojas();
-      if (data.appearance) applyRemoteAppearance(data.appearance);
       const serverPoojas = (data.poojas || []).map((item) => ({
         ...item,
         duration_hours: Math.max(1, Math.round((item.duration_minutes || 120) / 60)),

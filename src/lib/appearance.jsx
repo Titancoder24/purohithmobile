@@ -1,7 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { supabase } from "./supabase";
-import { fetchMarketplaceSettings } from "./marketplace";
 import { buildPalette, setLivePalette, syncBrandColors } from "./brandStyles";
 import { colors } from "./theme";
 
@@ -98,55 +96,30 @@ export function buttonTokens(input) {
 const AppearanceContext = createContext(null);
 
 export function AppearanceProvider({ children }) {
-  const [remote, setRemote] = useState(DEFAULT_APPEARANCE);
-  const [local, setLocal] = useState(null);
+  const [stored, setStored] = useState(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(KEY).then((raw) => {
       if (!raw) return;
-      try { setLocal(normalizeAppearance(JSON.parse(raw))); } catch { setLocal(null); }
+      try { setStored(normalizeAppearance(JSON.parse(raw))); } catch { setStored(null); }
     }).finally(() => setReady(true));
   }, []);
 
-  const applyRemoteAppearance = useCallback((raw) => {
-    if (!raw) return;
-    setRemote(normalizeAppearance(raw));
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const readStoredAppearance = async () => {
-      try {
-        if (!supabase) return;
-        const { data } = await supabase.from("platform_settings").select("value").eq("key", "customer_appearance").maybeSingle();
-        if (cancelled || !data?.value) return;
-        const parsed = typeof data.value === "string" ? JSON.parse(data.value) : data.value;
-        applyRemoteAppearance(parsed);
-      } catch { /* keep the built-in theme */ }
-    };
-    fetchMarketplaceSettings().then((data) => {
-      if (cancelled) return;
-      if (data?.appearance) applyRemoteAppearance(data.appearance);
-      else return readStoredAppearance();
-    }).catch(() => readStoredAppearance().catch(() => {}));
-    return () => { cancelled = true; };
-  }, [applyRemoteAppearance]);
-
-  const appearance = useMemo(() => normalizeAppearance(local || remote), [local, remote]);
+  const appearance = useMemo(() => normalizeAppearance(stored || DEFAULT_APPEARANCE), [stored]);
   const tokens = useMemo(() => buttonTokens(appearance), [appearance]);
   setLivePalette(tokens);
   syncBrandColors(colors, tokens);
 
   const setAppearance = useCallback(async (patch) => {
     const next = normalizeAppearance({ ...appearance, ...patch });
-    setLocal(next);
+    setStored(next);
     await AsyncStorage.setItem(KEY, JSON.stringify(next));
     return next;
   }, [appearance]);
 
   const resetAppearance = useCallback(async () => {
-    setLocal(null);
+    setStored(null);
     await AsyncStorage.removeItem(KEY);
   }, []);
 
@@ -154,11 +127,10 @@ export function AppearanceProvider({ children }) {
     appearance,
     tokens,
     ready,
-    followingAdmin: local == null,
+    customized: stored != null,
     setAppearance,
     resetAppearance,
-    applyRemoteAppearance,
-  }), [appearance, applyRemoteAppearance, local, ready, resetAppearance, setAppearance, tokens]);
+  }), [appearance, ready, resetAppearance, setAppearance, stored, tokens]);
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>;
 }
@@ -168,9 +140,8 @@ export function useAppearance() {
     appearance: DEFAULT_APPEARANCE,
     tokens: buttonTokens(DEFAULT_APPEARANCE),
     ready: true,
-    followingAdmin: true,
+    customized: false,
     setAppearance: async () => DEFAULT_APPEARANCE,
     resetAppearance: async () => {},
-    applyRemoteAppearance: () => {},
   };
 }

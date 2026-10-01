@@ -124,10 +124,10 @@ function LanguageSettings() {
 }
 
 function AppearanceSettings() {
-  const { appearance, tokens, followingAdmin, setAppearance, resetAppearance } = useAppearance();
+  const { appearance, tokens, customized, setAppearance, resetAppearance } = useAppearance();
   const preset = APPEARANCE_PRESETS.find((item) => item.id === appearance.preset);
   return <>
-    <Text style={styles.lede}>This palette colors buttons, banners, chips, and highlights across the app. Purohith Connect sets the default. A choice here stays on this device.</Text>
+    <Text style={styles.lede}>This palette colors buttons, banners, chips, and highlights on your phone. It stays on this device and does not change anyone else's app.</Text>
     <View style={styles.previewCard}>
       <Text style={[styles.previewEyebrow, { color: tokens.accent }]}>CEREMONY</Text>
       <Text style={styles.previewTitle}>Ayudha Puja</Text>
@@ -182,8 +182,8 @@ function AppearanceSettings() {
         </Pressable>;
       })}
     </View>
-    <Text style={styles.previewNote}>{followingAdmin ? "Using the theme published from admin." : `Using your ${preset?.label || "custom"} theme on this device.`}</Text>
-    {followingAdmin ? null : <Pressable onPress={resetAppearance} style={({ pressed }) => [styles.resetTheme, pressed && styles.pressed]}><Palette size={16} color={colors.ink} /><Text style={styles.resetThemeText}>Use the admin theme</Text></Pressable>}
+    <Text style={styles.previewNote}>{customized ? `Using your ${preset?.label || "custom"} theme on this device.` : "Using the original app colors."}</Text>
+    {customized ? <Pressable onPress={resetAppearance} style={({ pressed }) => [styles.resetTheme, pressed && styles.pressed]}><Palette size={16} color={colors.ink} /><Text style={styles.resetThemeText}>Reset to original colors</Text></Pressable> : null}
   </>;
 }
 

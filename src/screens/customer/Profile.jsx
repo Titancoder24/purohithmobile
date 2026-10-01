@@ -13,7 +13,7 @@ export default function Profile({ navigation }) {
   const { t } = useI18n();
   const { user, logout, updateProfile } = useAuth();
   const { language, area, notificationsEnabled } = usePreferences();
-  const { appearance, followingAdmin } = useAppearance();
+  const { appearance } = useAppearance();
   const paletteLabel = APPEARANCE_PRESETS.find((item) => item.id === appearance.preset)?.label || "Custom";
   const shapeLabel = BUTTON_SHAPES.find((item) => item.id === appearance.buttonShape)?.label || "Pill";
   const { width } = useWindowDimensions();
@@ -52,7 +52,7 @@ export default function Profile({ navigation }) {
 
   const rows = [
     { icon: Smartphone, title: "Mobile number", value: user.phone ? `+91 ${user.phone}` : "Add number", onPress: openEdit },
-    { icon: Palette, title: "Appearance", value: followingAdmin ? `${paletteLabel} · admin` : `${paletteLabel} · ${shapeLabel}`, onPress: () => navigation.navigate("Settings", { section: "appearance" }) },
+    { icon: Palette, title: "Appearance", value: `${paletteLabel} · ${shapeLabel}`, onPress: () => navigation.navigate("Settings", { section: "appearance" }) },
     { icon: Languages, title: "Language", value: language === "kn" ? "Kannada" : "English", onPress: () => navigation.navigate("Settings", { section: "language" }) },
     { icon: MapPin, title: "Service location", value: `${area.name}, Bengaluru`, onPress: () => navigation.navigate("Settings", { section: "location" }) },
     { icon: Bell, title: "Notifications", value: notificationsEnabled ? "On" : "Off", onPress: () => navigation.navigate("Settings", { section: "notifications" }) },
