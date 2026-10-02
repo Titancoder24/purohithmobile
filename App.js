@@ -19,6 +19,7 @@ import { bindBrandStyles } from "./src/lib/brandStyles";
 import AppTopBar from "./src/components/AppTopBar";
 import BrandLogo from "./src/components/BrandLogo";
 import DAPWidget from "./src/components/DAPWidget";
+import IncomingCall from "./src/components/IncomingCall";
 import LoadingScreen from "./src/components/LoadingScreen";
 import RolePicker from "./src/screens/RolePicker";
 import Login from "./src/screens/Login";
@@ -293,6 +294,9 @@ function Router() {
       </RootStack.Navigator>
       <WidgetBoundary>
         <DAPWidget navigationRef={navigationRef} />
+      </WidgetBoundary>
+      <WidgetBoundary>
+        <IncomingCall navigationRef={navigationRef} />
       </WidgetBoundary>
     </NavigationContainer>
   );

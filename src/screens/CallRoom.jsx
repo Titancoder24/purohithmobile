@@ -9,6 +9,10 @@ import { Button } from "../components/UI";
 import { useAuth } from "../lib/auth";
 import { listBookings } from "../lib/payments";
 import { currentCallerId, listRecentCallSignals, selectCallSignals, sendCallSignal, subscribeCallSignals } from "../lib/callSignaling";
+import { logBookingCall } from "../lib/bookingChat";
+import { notifyCallPush } from "../lib/notifications";
+import { createMediaStream, createPeerConnection, getCallMedia, isCallSupported, startCallAudio, stopCallAudio, unsupportedReason } from "../lib/webrtc";
+import CallVideo from "../components/CallVideo";
 
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
@@ -45,19 +49,15 @@ function routeBooking(value) {
 }
 
 async function captureCallMedia() {
-  const devices = globalThis.navigator?.mediaDevices;
-  if (!devices?.getUserMedia) {
-    throw new Error("This browser cannot use the microphone. Open the booking in Chrome, Safari, or Firefox.");
-  }
   try {
-    return await devices.getUserMedia({ audio: true, video: true });
+    return await getCallMedia({ audio: true, video: true });
   } catch (error) {
-    if (error?.name === "NotAllowedError") throw new Error("Allow the microphone and camera to place the call.");
+    if (error?.name === "NotAllowedError") throw new Error(error.message || "Allow the microphone and camera to place the call.");
     try {
-      return await devices.getUserMedia({ audio: true, video: false });
+      return await getCallMedia({ audio: true, video: false });
     } catch (audioError) {
       if (audioError?.name === "NotAllowedError") throw new Error("Allow the microphone to place the call.");
-      throw new Error("Microphone access failed. Check the browser permission and try again.");
+      throw new Error(audioError?.message || "Microphone access failed. Check the permission and try again.");
     }
   }
 }
@@ -83,6 +83,8 @@ export default function CallRoom({ route }) {
   const [failed, setFailed] = useState(false);
   const [mediaReady, setMediaReady] = useState(false);
   const [soundLocked, setSoundLocked] = useState(false);
+  const [localMedia, setLocalMedia] = useState(null);
+  const [remoteMedia, setRemoteMedia] = useState(null);
   const peer = useRef(null);
   const stream = useRef(null);
   const remoteStream = useRef(null);
@@ -98,6 +100,11 @@ export default function CallRoom({ route }) {
   const activeRef = useRef(false);
   const generation = useRef(0);
   const iceWatch = useRef(null);
+  const isCaller = useRef(false);
+  const connectedAt = useRef(0);
+  const declined = useRef(false);
+  const callLogged = useRef(true);
+  const noAnswer = useRef(null);
   const isCustomer = user?.role === "customer";
 
   useEffect(() => {
@@ -141,9 +148,12 @@ export default function CallRoom({ route }) {
 
   const stopMedia = () => {
     clearTimeout(iceWatch.current);
+    stopCallAudio();
     stream.current?.getTracks?.().forEach((track) => track.stop());
     stream.current = null;
     remoteStream.current = null;
+    setLocalMedia(null);
+    setRemoteMedia(null);
     if (localVideo.current) localVideo.current.srcObject = null;
     if (remoteVideo.current) remoteVideo.current.srcObject = null;
     peer.current?.close?.();
@@ -155,9 +165,26 @@ export default function CallRoom({ route }) {
     pendingIce.current = [];
   };
 
-  useEffect(() => () => stopMedia(), []);
+  const writeCallLog = () => {
+    if (callLogged.current || !isCaller.current) return;
+    callLogged.current = true;
+    const outcome = connectedAt.current ? "completed" : declined.current ? "declined" : "missed";
+    const durationSeconds = connectedAt.current ? (Date.now() - connectedAt.current) / 1000 : 0;
+    logBookingCall({ bookingId, senderRole: user?.role, senderName: user?.name, outcome, durationSeconds }).catch(() => {});
+    if (outcome === "missed") notifyCallPush(bookingId, "missed").catch(() => {});
+  };
+  const writeCallLogRef = useRef(writeCallLog);
+  writeCallLogRef.current = writeCallLog;
+
+  useEffect(() => () => {
+    clearTimeout(noAnswer.current);
+    writeCallLogRef.current();
+    stopMedia();
+  }, []);
 
   const markConnected = () => {
+    clearTimeout(noAnswer.current);
+    if (!connectedAt.current) connectedAt.current = Date.now();
     clearTimeout(iceWatch.current);
     setConnected(true);
     setFailed(false);
@@ -188,12 +215,12 @@ export default function CallRoom({ route }) {
         }, 12000);
       }
     };
-    connection.oniceconnectionstatechange = update;
-    connection.onconnectionstatechange = () => {
+    connection.addEventListener("iceconnectionstatechange", update);
+    connection.addEventListener("connectionstatechange", () => {
       if (!currentPeer()) return;
       if (connection.connectionState === "connected") markConnected();
       else if (connection.connectionState === "failed") markFailed();
-    };
+    });
   };
 
   const flushIce = async () => {
@@ -205,12 +232,18 @@ export default function CallRoom({ route }) {
   };
 
   const rememberRemoteTrack = (event) => {
-    const media = remoteStream.current || new MediaStream();
+    if (Platform.OS !== "web" && event.streams?.[0]) {
+      remoteStream.current = event.streams[0];
+      setRemoteMedia(event.streams[0]);
+      return;
+    }
+    const media = remoteStream.current || createMediaStream();
     const tracks = event.streams?.[0]?.getTracks?.() || [event.track];
     tracks.forEach((track) => {
       if (track && !media.getTracks().some((item) => item.id === track.id)) media.addTrack(track);
     });
     remoteStream.current = media;
+    setRemoteMedia(media);
     playRemote();
   };
 
@@ -223,21 +256,24 @@ export default function CallRoom({ route }) {
         return null;
       }
       stream.current = captured;
+      setLocalMedia(captured);
       setMediaReady(true);
       setCamera(captured.getVideoTracks().some((track) => track.readyState === "live"));
       attachLocal();
+      startCallAudio();
     }
     if (generation.current !== token || !activeRef.current) return null;
     peer.current?.close?.();
     pendingIce.current = [];
     remoteStream.current = null;
-    const connection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    setRemoteMedia(null);
+    const connection = createPeerConnection({ iceServers: ICE_SERVERS });
     peer.current = connection;
     stream.current.getTracks().forEach((track) => connection.addTrack(track, stream.current));
-    connection.ontrack = rememberRemoteTrack;
-    connection.onicecandidate = (event) => {
+    connection.addEventListener("track", rememberRemoteTrack);
+    connection.addEventListener("icecandidate", (event) => {
       if (event.candidate) sendIce(event.candidate.toJSON ? event.candidate.toJSON() : event.candidate);
-    };
+    });
     watchIce(connection);
     attachLocal();
     if (generation.current !== token || !activeRef.current) {
@@ -322,7 +358,11 @@ export default function CallRoom({ route }) {
       }
       return;
     }
-    if (row.signal_type === "hangup") end(false);
+    if (row.signal_type === "hangup") {
+      if (row.payload?.reason === "declined") declined.current = true;
+      end(false);
+      if (declined.current) setStatus(`${contactName} declined the call.`);
+    }
   };
 
   const receiveSignal = async (packet, sendSignal) => {
@@ -358,8 +398,8 @@ export default function CallRoom({ route }) {
       setStatus("Open this call from the booking.");
       return;
     }
-    if (Platform.OS !== "web" || typeof globalThis.RTCPeerConnection === "undefined") {
-      setStatus("Voice and video calls run in the browser. Open this booking on the website and press Start video call.");
+    if (!isCallSupported) {
+      setStatus(unsupportedReason);
       return;
     }
     activeRef.current = true;
@@ -373,6 +413,10 @@ export default function CallRoom({ route }) {
     answerSeen.current = false;
     seenSignals.current = new Set();
     pendingIce.current = [];
+    isCaller.current = false;
+    connectedAt.current = 0;
+    declined.current = false;
+    callLogged.current = true;
     const startedAt = Date.now();
     try {
       const isDemo = Boolean(user?.demo || booking?.demo || bookingId === "demo-confirmed");
@@ -422,12 +466,32 @@ export default function CallRoom({ route }) {
       await subscription.ready;
       if (!alive()) return;
       const recent = selectCallSignals(await listRecentCallSignals(bookingId), startedAt);
+      const otherWaiting = recent.some((row) => row.signal_type === "ready" && row.sender_id !== myId.current);
+      if (params.autoStart && !otherWaiting) {
+        activeRef.current = false;
+        stopMedia();
+        setMediaReady(false);
+        setStarted(false);
+        setStatus(`${contactName}'s call has ended. Press Start video call to call back.`);
+        return;
+      }
+      isCaller.current = !params.autoStart && !otherWaiting;
+      callLogged.current = !isCaller.current;
       for (const row of recent) await enqueue(row);
       if (!alive()) return;
       await sendCallSignal({ bookingId, signalType: "ready", payload: { role: user?.role || "customer" } });
       if (!alive()) return;
       if (!offerSent.current) {
         setStatus(isCustomer ? "Waiting for the purohit to join..." : "Waiting for the customer to join...");
+      }
+      if (isCaller.current) {
+        notifyCallPush(bookingId, "ring").catch(() => {});
+        clearTimeout(noAnswer.current);
+        noAnswer.current = setTimeout(() => {
+          if (!alive() || connectedAt.current) return;
+          end(true);
+          setStatus(`${contactName} did not answer.`);
+        }, 45000);
       }
     } catch (error) {
       if (!alive()) return;
@@ -443,6 +507,8 @@ export default function CallRoom({ route }) {
     const wasActive = activeRef.current;
     activeRef.current = false;
     generation.current += 1;
+    clearTimeout(noAnswer.current);
+    if (wasActive) writeCallLog();
     if (notify && wasActive && BOOKING_ID.test(bookingId) && !user?.demo && !booking?.demo) {
       sendCallSignal({ bookingId, signalType: "hangup", payload: {} }).catch(() => {});
     } else if (notify && wasActive) {
@@ -458,11 +524,20 @@ export default function CallRoom({ route }) {
   };
 
   const retry = () => {
+    if (!connectedAt.current) callLogged.current = true;
     end(true);
     connect();
   };
 
   const enableSound = () => playRemote();
+
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!params.autoStart || autoStarted.current) return;
+    autoStarted.current = true;
+    connect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.autoStart]);
 
   const toggleMic = () => {
     const next = !muted;
@@ -497,8 +572,8 @@ export default function CallRoom({ route }) {
       </View>
     </View>
     <View style={styles.stage}>
-      <CallVideo videoRef={remoteVideo} />
-      <CallVideo videoRef={localVideo} muted mirror />
+      <CallVideo videoRef={remoteVideo} stream={remoteMedia} style={Platform.OS === "web" ? styles.remoteVideo : styles.remoteVideoNative} />
+      <CallVideo videoRef={localVideo} stream={localMedia} muted mirror zOrder={1} style={Platform.OS === "web" ? styles.localVideo : styles.localVideoNative} />
       {started && !mediaReady ? <View style={styles.previewEmpty}><Video size={26} color={colors.muted2} /><Text style={styles.previewTitle}>Waiting for camera preview</Text><Text style={styles.previewText}>Allow microphone and camera access. Voice still works if the camera is blocked.</Text></View> : null}
       {soundLocked ? <Pressable accessibilityLabel="Turn call sound on" onPress={enableSound} style={styles.hear}><Text style={styles.hearText}>Tap to hear</Text></Pressable> : null}
       <View style={styles.status}><ShieldCheck size={14} color={colors.success} /><Text style={styles.statusText}>{connected ? "Connected" : status}</Text></View>
@@ -506,25 +581,11 @@ export default function CallRoom({ route }) {
     <View style={styles.controls}><Control icon={muted ? MicOff : Mic} label={muted ? "Unmute" : "Mute"} onPress={toggleMic} /><Control icon={camera ? Video : VideoOff} label={camera ? "Camera" : "Video"} onPress={toggleCamera} /><Pressable accessibilityLabel="End call" onPress={() => { end(); navigation.goBack(); }} style={styles.end}><PhoneOff size={20} color={colors.white} /></Pressable></View>
     {!started ? <Button title="Start video call" icon={Phone} onPress={connect} style={styles.start} /> : null}
     {failed ? <Button title="Try the call again" icon={Phone} onPress={retry} style={styles.start} /> : null}
-    <Text style={styles.note}>Both people open this call from the booking. The browser will ask for the microphone, and the camera if you want video.</Text>
+    <Text style={styles.note}>{Platform.OS === "web" ? "The browser will ask for the microphone, and the camera if you want video." : "The app will ask for the microphone, and the camera if you want video."}</Text>
   </View>;
 }
 
 function Control({ icon: Icon, label, onPress }) { return <View style={styles.controlWrap}><Pressable accessibilityLabel={label} onPress={onPress} style={styles.control}><Icon size={19} color={colors.ink} /></Pressable><Text style={styles.controlLabel}>{label}</Text></View>; }
-
-function CallVideo({ videoRef, muted = false, mirror = false }) {
-  if (Platform.OS !== "web") {
-    return <View style={styles.nativeVideo}><Video size={34} color={colors.muted2} /><Text style={styles.nativeVideoText}>Open the website to place this call</Text></View>;
-  }
-  const props = {
-    ref: videoRef,
-    autoPlay: true,
-    playsInline: true,
-    style: mirror ? { ...styles.localVideo, transform: "scaleX(-1)" } : styles.remoteVideo,
-  };
-  if (muted) props.muted = true;
-  return React.createElement("video", props);
-}
 
 const styles = bindBrandStyles({
   root: { flex: 1, backgroundColor: "#0E0E0E", paddingHorizontal: spacing.lg },
@@ -544,8 +605,8 @@ const styles = bindBrandStyles({
   localVideo: { position: "absolute", right: 14, bottom: 14, width: 132, height: 174, objectFit: "cover", backgroundColor: "#151515", borderRadius: 14, borderWidth: 2, borderColor: colors.white, zIndex: 3 },
   hear: { position: "absolute", alignSelf: "center", top: "46%", zIndex: 5, minHeight: 40, paddingHorizontal: 16, borderRadius: 20, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
   hearText: { color: colors.ink, fontSize: 13, fontWeight: "700" },
-  nativeVideo: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
-  nativeVideoText: { color: colors.muted2, fontSize: 12 },
+  remoteVideoNative: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "#202020" },
+  localVideoNative: { position: "absolute", right: 14, bottom: 14, width: 112, height: 150, backgroundColor: "#151515", borderRadius: 14, overflow: "hidden", borderWidth: 2, borderColor: colors.white },
   previewEmpty: { position: "absolute", alignSelf: "center", top: "42%", alignItems: "center", maxWidth: 230, zIndex: 4 },
   previewTitle: { color: colors.white, fontSize: 14, fontWeight: "700", marginTop: 10 },
   previewText: { color: "#A8A8A3", fontSize: 11, textAlign: "center", lineHeight: 16, marginTop: 5 },

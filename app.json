@@ -19,8 +19,12 @@
       "infoPlist": {
         "NSFaceIDUsageDescription": "Use Face ID to unlock your Purohith Connect session.",
         "NSPhotoLibraryUsageDescription": "Attach ID / certificate photos to your priest profile.",
-        "NSCameraUsageDescription": "Take a photo of your ID / certificate for priest verification.",
+        "NSCameraUsageDescription": "Take verification photos and show your video on private booking calls.",
         "NSLocationWhenInUseUsageDescription": "Use your location to match nearby purohits and, with explicit consent, show live arrival progress for an active booking.",
+        "NSMicrophoneUsageDescription": "Talk with your purohit or customer on private booking calls.",
+        "UIBackgroundModes": [
+          "audio"
+        ],
         "LSApplicationQueriesSchemes": [
           "upi",
           "tez",
@@ -42,7 +46,12 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK"
       ]
     },
     "web": {
@@ -78,7 +87,14 @@
           "locationWhenInUsePermission": "Allow Purohith Connect to use your location for nearby matching and consent-based booking tracking."
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "Show your video to your purohit or customer on private booking calls.",
+          "microphonePermission": "Talk with your purohit or customer on private booking calls."
+        }
+      ]
     ],
     "extra": {
       "apiUrl": "https://pooja-marketplace-3.preview.emergentagent.com",

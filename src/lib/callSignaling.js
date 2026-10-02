@@ -49,6 +49,22 @@ export async function listRecentCallSignals(bookingId) {
   return data || [];
 }
 
+export function subscribeIncomingCalls(userId, onSignal) {
+  if (!supabase || !userId) return { unsubscribe: () => {} };
+  const channel = supabase
+    .channel(`incoming-calls:${userId}`)
+    .on("postgres_changes", {
+      event: "INSERT",
+      schema: "public",
+      table: "booking_call_signals",
+    }, (payload) => {
+      const row = payload?.new;
+      if (row && row.sender_id !== userId && (row.signal_type === "ready" || row.signal_type === "hangup")) onSignal(row);
+    })
+    .subscribe();
+  return { unsubscribe: () => { supabase.removeChannel(channel); } };
+}
+
 export function subscribeCallSignals(bookingId, onSignal) {
   if (!supabase) return { unsubscribe: () => {}, ready: Promise.resolve() };
   const channel = supabase.channel(`booking-call:${bookingId}`);

@@ -5,6 +5,7 @@ import * as LocalAuthentication from "expo-local-authentication";
 import api, { tokens } from "./api";
 import { t } from "./i18n";
 import { supabase } from "./supabase";
+import { unregisterPush } from "./notifications";
 
 const AuthCtx = createContext(null);
 
@@ -116,6 +117,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     signingOutRef.current = true;
+    await unregisterPush();
     setUser(null);
     setRoleState(null);
     await tokens.clear();

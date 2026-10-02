@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { bindBrandStyles } from "../lib/brandStyles";
 import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
-import { ArrowLeft, Phone, Send, ShieldCheck } from "lucide-react-native";
+import { ArrowLeft, Phone, PhoneIncoming, PhoneMissed, PhoneOutgoing, Send, ShieldCheck } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -9,7 +9,7 @@ import { colors, font, spacing } from "../lib/theme";
 import { useAuth } from "../lib/auth";
 import { startInAppCall } from "../lib/calls";
 import { listBookings } from "../lib/payments";
-import { explainChatError, listBookingMessages, sendBookingMessage, subscribeBookingMessages } from "../lib/bookingChat";
+import { describeCall, explainChatError, listBookingMessages, sendBookingMessage, subscribeBookingMessages } from "../lib/bookingChat";
 
 const BOOKING_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -200,15 +200,34 @@ export default function Conversation({ route }) {
         ListEmptyComponent={<Text style={styles.empty}>Start the conversation about timing, address, or ceremony details.</Text>}
         renderItem={({ item }) => {
           const mine = item.sender_id ? item.sender_id === user?.id : item.sender_role === user?.role;
+          const time = new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          if (item.kind === "call") {
+            const call = describeCall(item.call_meta, mine);
+            const Icon = call.missed ? PhoneMissed : mine ? PhoneOutgoing : PhoneIncoming;
+            return (
+              <Pressable
+                accessibilityLabel={`${call.title}, ${call.detail}. Call back`}
+                onPress={() => startInAppCall(navigation, { bookingId, booking })}
+                style={[styles.callBubble, mine ? styles.callMine : styles.callTheirs]}
+              >
+                <View style={[styles.callIcon, call.missed && styles.callIconMissed]}>
+                  <Icon size={17} color={call.missed ? colors.danger : colors.success} />
+                </View>
+                <View style={{ flexShrink: 1 }}>
+                  <Text style={[styles.callTitle, call.missed && { color: colors.danger }]}>{call.title}</Text>
+                  <Text style={styles.callDetail}>{call.detail}</Text>
+                </View>
+                <Text style={styles.callTime}>{time}</Text>
+              </Pressable>
+            );
+          }
           return (
             <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}>
               <Text style={[styles.sender, mine && { color: "rgba(255,255,255,.75)" }]}>
                 {mine ? "You" : item.sender_name || title}
               </Text>
               <Text style={[styles.message, mine && { color: colors.white }]}>{item.content}</Text>
-              <Text style={[styles.time, mine && { color: "rgba(255,255,255,.72)" }]}>
-                {new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </Text>
+              <Text style={[styles.time, mine && { color: "rgba(255,255,255,.72)" }]}>{time}</Text>
             </View>
           );
         }}
@@ -257,6 +276,14 @@ const styles = bindBrandStyles({
   sender: { color: colors.muted2, fontSize: 10, fontWeight: "700", marginBottom: 4 },
   message: { color: colors.ink, fontSize: 14, lineHeight: 20 },
   time: { color: colors.muted2, fontSize: 9, marginTop: 6, alignSelf: "flex-end" },
+  callBubble: { maxWidth: "82%", minWidth: 210, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16, borderWidth: 1, borderColor: colors.warmBorder, backgroundColor: colors.white },
+  callMine: { alignSelf: "flex-end", borderBottomRightRadius: 5 },
+  callTheirs: { alignSelf: "flex-start", borderBottomLeftRadius: 5 },
+  callIcon: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "#EEF8F2" },
+  callIconMissed: { backgroundColor: "#FDECEC" },
+  callTitle: { color: colors.ink, fontSize: 13, fontWeight: "700" },
+  callDetail: { color: colors.muted2, fontSize: 11, marginTop: 2 },
+  callTime: { color: colors.muted2, fontSize: 9, marginLeft: "auto", alignSelf: "flex-end" },
   composer: {
     flexDirection: "row",
     alignItems: "flex-end",

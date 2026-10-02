@@ -6,7 +6,7 @@ import { Bell, Check, ChevronRight, CircleHelp, Crosshair, Globe2, Laptop, Locat
 import { colors, font } from "../lib/theme";
 import { usePreferences } from "../lib/preferences";
 import { APPEARANCE_PRESETS, BUTTON_SHAPES, BUTTON_STYLES, COLOR_SWATCHES, useAppearance } from "../lib/appearance";
-import { registerForPush } from "../lib/notifications";
+import { registerForPush, unregisterPush } from "../lib/notifications";
 import { useAuth } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 
@@ -56,6 +56,8 @@ function NotificationSettings() {
       if (next) {
         const token = await registerForPush();
         if (Platform.OS !== "web" && !token) throw new Error("Notification permission was not granted");
+      } else {
+        await unregisterPush();
       }
       await setNotificationsEnabled(next);
     } catch (reason) { Alert.alert("Notifications", reason?.message || "Could not update notifications"); }
