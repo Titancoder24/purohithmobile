@@ -1,77 +1,211 @@
 import React, { useEffect, useRef, useState } from "react";
 import { bindBrandStyles } from "../lib/brandStyles";
 import { Platform, Pressable, Text, View } from "react-native";
-import { Mic, MicOff, Phone, PhoneOff, ShieldCheck, Video, VideoOff, ArrowLeft } from "lucide-react-native";
+import { Mic, MicOff, Phone, PhoneOff, ShieldCheck, Video, VideoOff, ArrowLeft, Lock } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { colors, spacing } from "../lib/theme";
 import { Button } from "../components/UI";
-import api, { API_URL, tokens } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { Lock } from "lucide-react-native";
+import { listBookings } from "../lib/payments";
+import { currentCallerId, listRecentCallSignals, sendCallSignal, subscribeCallSignals } from "../lib/callSignaling";
+
+const BOOKING_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function routeBooking(value) {
+  return value && typeof value === "object" ? value : null;
+}
+
+async function captureCallMedia() {
+  const devices = globalThis.navigator?.mediaDevices;
+  if (!devices?.getUserMedia) {
+    throw new Error("This browser cannot use the microphone. Open the booking in Chrome, Safari, or Firefox.");
+  }
+  try {
+    return await devices.getUserMedia({ audio: true, video: true });
+  } catch (error) {
+    if (error?.name === "NotAllowedError") throw new Error("Allow the microphone and camera to place the call.");
+    try {
+      return await devices.getUserMedia({ audio: true, video: false });
+    } catch (audioError) {
+      if (audioError?.name === "NotAllowedError") throw new Error("Allow the microphone to place the call.");
+      throw new Error("Microphone access failed. Check the browser permission and try again.");
+    }
+  }
+}
 
 export default function CallRoom({ route }) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { user } = useAuth();
-  const routeBooking = route.params?.booking;
-  const bookingId = route.params?.bookingId || routeBooking?.id;
-  const [booking, setBooking] = useState(routeBooking || (bookingId === "demo-confirmed" ? { id: "demo-confirmed", demo: true, status: "confirmed", pooja_name: "Satyanarayan Pooja", priest_name: "Demo Purohit", priest_phone: "9876543210", customer_name: "Demo Customer", customer_phone: "9000000001" } : null));
+  const params = route.params || {};
+  const passedBooking = routeBooking(params.booking);
+  const bookingId = params.bookingId || passedBooking?.id || "";
+  const [booking, setBooking] = useState(passedBooking || (bookingId === "demo-confirmed" ? { id: "demo-confirmed", demo: true, status: "confirmed", pooja_name: "Satyanarayan Pooja", priest_name: params.priestName || "Demo Purohit", customer_name: params.customerName || "Demo Customer" } : {
+    id: bookingId,
+    priest_name: params.priestName || "Purohit",
+    customer_name: params.customerName || "Customer",
+    pooja_name: params.poojaName || "Ceremony",
+  }));
   const [status, setStatus] = useState("Ready to call");
   const [muted, setMuted] = useState(false);
   const [camera, setCamera] = useState(true);
   const [connected, setConnected] = useState(false);
   const [started, setStarted] = useState(false);
   const [mediaReady, setMediaReady] = useState(false);
-  const socket = useRef(null);
   const peer = useRef(null);
   const stream = useRef(null);
   const localVideo = useRef(null);
   const remoteVideo = useRef(null);
   const demoChannel = useRef(null);
+  const signaler = useRef(null);
+  const seenSignals = useRef(new Set());
+  const pendingIce = useRef([]);
+  const offerSent = useRef(false);
+  const myId = useRef(user?.id || null);
+  const isCustomer = user?.role === "customer";
 
   useEffect(() => {
-    if (booking || !bookingId || user?.demo) return;
-    api.get(user?.role === "customer" ? "/bookings/customer" : "/bookings/priest").then(({ data }) => setBooking((data || []).find((item) => item.id === bookingId) || null)).catch(() => setStatus("This booking could not be loaded"));
-  }, [booking, bookingId, user?.demo, user?.role]);
+    if (!BOOKING_ID.test(bookingId) || user?.demo) return undefined;
+    let cancelled = false;
+    listBookings()
+      .then(({ bookings }) => {
+        const found = (bookings || []).find((item) => item.id === bookingId);
+        if (!cancelled && found) setBooking(found);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [bookingId, user?.demo]);
 
   useEffect(() => {
     if (Platform.OS !== "web" || !mediaReady || !localVideo.current || !stream.current) return undefined;
     const video = localVideo.current;
     video.srcObject = stream.current;
+    video.muted = true;
     video.play?.().catch?.(() => {});
     return () => { video.srcObject = null; };
   }, [mediaReady]);
 
-  useEffect(() => () => {
+  const stopMedia = () => {
     stream.current?.getTracks?.().forEach((track) => track.stop());
+    stream.current = null;
     peer.current?.close?.();
-    socket.current?.close?.();
+    peer.current = null;
+    signaler.current?.unsubscribe?.();
+    signaler.current = null;
     demoChannel.current?.close?.();
-  }, []);
+    demoChannel.current = null;
+    pendingIce.current = [];
+  };
 
-  const setupPeer = async (sendSignal) => {
-    if (!globalThis.navigator?.mediaDevices?.getUserMedia) throw new Error("Camera access is unavailable in this app surface. Open the web app in a camera-enabled browser or use an Expo development build.");
-    setStatus("Requesting camera and microphone access...");
-    const mediaRequest = globalThis.navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Camera permission timed out. Allow camera and microphone access, then try again.")), 3500));
-    stream.current = await Promise.race([mediaRequest, timeout]);
+  useEffect(() => () => stopMedia(), []);
+
+  const attachLocal = () => {
+    if (localVideo.current && stream.current) {
+      localVideo.current.srcObject = stream.current;
+      localVideo.current.muted = true;
+      localVideo.current.play?.().catch?.(() => {});
+    }
+  };
+
+  const flushIce = async () => {
+    if (!peer.current?.remoteDescription) return;
+    const queued = pendingIce.current.splice(0);
+    for (const candidate of queued) {
+      try { await peer.current.addIceCandidate(candidate); } catch (_) {}
+    }
+  };
+
+  const setupPeer = async (sendIce) => {
+    stream.current = await captureCallMedia();
     setMediaReady(true);
-    if (localVideo.current) { localVideo.current.srcObject = stream.current; localVideo.current.play?.().catch?.(() => {}); }
+    setCamera(stream.current.getVideoTracks().some((track) => track.enabled));
+    attachLocal();
     peer.current = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
     stream.current.getTracks().forEach((track) => peer.current.addTrack(track, stream.current));
-    peer.current.ontrack = (event) => { if (remoteVideo.current) { remoteVideo.current.srcObject = event.streams[0]; remoteVideo.current.play?.().catch?.(() => {}); } };
-    peer.current.onicecandidate = (event) => { if (event.candidate) sendSignal({ type: "ice-candidate", candidate: event.candidate }); };
-    peer.current.onconnectionstatechange = () => { if (peer.current.connectionState === "connected") { setConnected(true); setStatus("Connected securely"); } };
+    peer.current.ontrack = (event) => {
+      const remoteStream = event.streams?.[0];
+      if (remoteVideo.current && remoteStream) {
+        remoteVideo.current.srcObject = remoteStream;
+        remoteVideo.current.play?.().catch?.(() => {});
+      }
+    };
+    peer.current.onicecandidate = (event) => {
+      if (event.candidate) sendIce(event.candidate.toJSON ? event.candidate.toJSON() : event.candidate);
+    };
+    peer.current.onconnectionstatechange = () => {
+      const state = peer.current?.connectionState;
+      if (state === "connected") {
+        setConnected(true);
+        setStatus("Connected");
+      } else if (state === "failed") {
+        setStatus("The call could not connect. Ask the other person to stay on this screen and try again.");
+      }
+    };
     return peer.current;
+  };
+
+  const sendOffer = async () => {
+    if (offerSent.current || !peer.current || !isCustomer) return;
+    offerSent.current = true;
+    setStatus("Calling...");
+    const offer = await peer.current.createOffer();
+    await peer.current.setLocalDescription(offer);
+    await sendCallSignal({
+      bookingId,
+      signalType: "offer",
+      payload: { sdp: { type: peer.current.localDescription.type, sdp: peer.current.localDescription.sdp } },
+    });
+  };
+
+  const handleSignal = async (row) => {
+    if (!row?.id || seenSignals.current.has(row.id) || !peer.current) return;
+    seenSignals.current.add(row.id);
+    if (row.sender_id && row.sender_id === myId.current) return;
+    if (row.signal_type === "ready") {
+      if (isCustomer) await sendOffer();
+      else setStatus("Customer joined. Connecting...");
+      return;
+    }
+    if (row.signal_type === "offer" && !isCustomer) {
+      await peer.current.setRemoteDescription(row.payload?.sdp);
+      await flushIce();
+      const answer = await peer.current.createAnswer();
+      await peer.current.setLocalDescription(answer);
+      await sendCallSignal({
+        bookingId,
+        signalType: "answer",
+        payload: { sdp: { type: peer.current.localDescription.type, sdp: peer.current.localDescription.sdp } },
+      });
+      setStatus("Connecting...");
+      return;
+    }
+    if (row.signal_type === "answer" && isCustomer && peer.current.signalingState === "have-local-offer") {
+      await peer.current.setRemoteDescription(row.payload?.sdp);
+      await flushIce();
+      return;
+    }
+    if (row.signal_type === "ice-candidate" && row.payload?.candidate) {
+      if (!peer.current.remoteDescription) pendingIce.current.push(row.payload.candidate);
+      else {
+        try { await peer.current.addIceCandidate(row.payload.candidate); } catch (_) {}
+      }
+      return;
+    }
+    if (row.signal_type === "hangup") end(false);
   };
 
   const receiveSignal = async (packet, sendSignal) => {
     if (!peer.current) return;
-    if (packet.type === "offer") { await peer.current.setRemoteDescription(packet.offer); const answer = await peer.current.createAnswer(); await peer.current.setLocalDescription(answer); sendSignal({ type: "answer", answer }); }
+    if (packet.type === "offer") {
+      await peer.current.setRemoteDescription(packet.offer);
+      const answer = await peer.current.createAnswer();
+      await peer.current.setLocalDescription(answer);
+      sendSignal({ type: "answer", answer });
+    }
     if (packet.type === "answer") await peer.current.setRemoteDescription(packet.answer);
     if (packet.type === "ice-candidate") await peer.current.addIceCandidate(packet.candidate);
-    if (packet.type === "ready" && user?.role === "customer") {
+    if (packet.type === "ready" && isCustomer) {
       setStatus("Calling paired priest demo...");
       const offer = await peer.current.createOffer();
       await peer.current.setLocalDescription(offer);
@@ -80,63 +214,106 @@ export default function CallRoom({ route }) {
     if (packet.type === "hangup") end(false);
   };
 
-  const isCustomer = user?.role === "customer";
   const contactName = isCustomer
-    ? (booking?.priest_name || "Purohit")
-    : (booking?.customer_name || "Customer");
+    ? (booking?.priest_name || params.priestName || "Purohit")
+    : (booking?.customer_name || params.customerName || "Customer");
 
   const connect = async () => {
-    if (Platform.OS !== "web" || typeof globalThis.RTCPeerConnection === "undefined") {
-      setStatus("In-app call active. Secure end-to-end communication room established.");
-      setStarted(true);
-      setConnected(true);
+    if (started) return;
+    if (!bookingId) {
+      setStatus("Open this call from the booking.");
       return;
     }
-    if (started) return;
+    if (Platform.OS !== "web" || typeof globalThis.RTCPeerConnection === "undefined") {
+      setStatus("Voice and video calls run in the browser. Open this booking on the website and press Start video call.");
+      return;
+    }
     setStarted(true);
+    offerSent.current = false;
+    seenSignals.current = new Set();
+    pendingIce.current = [];
     try {
-      const isDemo = Boolean(user?.demo || booking?.demo);
+      const isDemo = Boolean(user?.demo || booking?.demo || bookingId === "demo-confirmed");
       if (isDemo) {
-        if (typeof globalThis.BroadcastChannel === "undefined") { setStatus("Open the paired demo in a browser tab to test the call."); return; }
+        if (typeof globalThis.BroadcastChannel === "undefined") {
+          setStatus("Open the paired demo in a browser tab to test the call.");
+          setStarted(false);
+          return;
+        }
         const sendSignal = (packet) => demoChannel.current?.postMessage(packet);
-        demoChannel.current = new BroadcastChannel(`purohith-call-${booking?.id || "demo"}`);
+        demoChannel.current = new BroadcastChannel(`purohith-call-${bookingId || "demo"}`);
         demoChannel.current.onmessage = ({ data }) => receiveSignal(data, sendSignal);
-        await setupPeer(sendSignal);
+        await setupPeer((candidate) => sendSignal({ type: "ice-candidate", candidate }));
         sendSignal({ type: "ready" });
-        if (user?.role === "customer") {
-          setStatus("Waiting for the paired priest...");
-        } else setStatus("Waiting for the customer demo...");
+        setStatus(isCustomer ? "Waiting for the paired priest..." : "Waiting for the customer demo...");
         return;
       }
-      const token = await tokens.getAccess();
-      if (!token) { setStatus("Demo calls are visual only. Sign in with OTP to place a live call."); return; }
-      const wsBase = API_URL.replace(/^http/, "ws");
-      socket.current = new WebSocket(`${wsBase}/api/ws/calls/${booking.id}?token=${encodeURIComponent(token)}`);
-      const sendSignal = (packet) => { if (socket.current?.readyState === 1) socket.current.send(JSON.stringify(packet)); };
-      socket.current.onopen = async () => {
-        setStatus("Calling...");
-        await setupPeer(sendSignal);
-        const offer = await peer.current.createOffer();
-        await peer.current.setLocalDescription(offer);
-        sendSignal({ type: "offer", offer });
-      };
-      socket.current.onmessage = async (event) => receiveSignal(JSON.parse(event.data), sendSignal);
-      socket.current.onerror = () => setStatus("Call connection unavailable");
-    } catch (error) { setStatus(error?.message || "Camera or microphone permission was denied"); setStarted(false); }
+      if (!BOOKING_ID.test(bookingId)) {
+        setStatus("This call is not linked to a booking.");
+        setStarted(false);
+        return;
+      }
+      setStatus("Requesting microphone and camera access...");
+      myId.current = await currentCallerId();
+      await setupPeer((candidate) => {
+        sendCallSignal({ bookingId, signalType: "ice-candidate", payload: { candidate } }).catch(() => {});
+      });
+      setStatus("Joining the call...");
+      const subscription = subscribeCallSignals(bookingId, (row) => {
+        handleSignal(row).catch(() => setStatus("The call signal could not be applied. Try again."));
+      });
+      signaler.current = subscription;
+      await subscription.ready;
+      const recent = await listRecentCallSignals(bookingId);
+      for (const row of recent) {
+        if (row.signal_type === "ready") await handleSignal(row);
+      }
+      await sendCallSignal({ bookingId, signalType: "ready", payload: { role: user?.role || "customer" } });
+      if (!offerSent.current) {
+        setStatus(isCustomer ? "Waiting for the purohit to join..." : "Waiting for the customer to join...");
+      }
+    } catch (error) {
+      stopMedia();
+      setMediaReady(false);
+      setStarted(false);
+      setStatus(error?.message || "The call could not start.");
+    }
   };
 
-  const end = (notify = true) => { if (notify) { socket.current?.send?.(JSON.stringify({ type: "hangup" })); demoChannel.current?.postMessage({ type: "hangup" }); } stream.current?.getTracks?.().forEach((track) => track.stop()); peer.current?.close?.(); socket.current?.close?.(); demoChannel.current?.close?.(); setConnected(false); setMediaReady(false); setStatus("Call ended"); setStarted(false); };
-  const toggleMic = () => { const next = !muted; stream.current?.getAudioTracks?.().forEach((track) => { track.enabled = !next; }); setMuted(next); };
-  const toggleCamera = () => { const next = !camera; stream.current?.getVideoTracks?.().forEach((track) => { track.enabled = next; }); setCamera(next); };
-  const VideoView = ({ videoRef, muted: isMuted, remote }) => Platform.OS === "web" ? React.createElement("video", { ref: videoRef, autoPlay: true, playsInline: true, muted: isMuted, style: remote ? styles.remoteVideo : styles.localVideo }) : <View style={styles.nativeVideo}><Video size={34} color={colors.muted2} /><Text style={styles.nativeVideoText}>Native WebRTC call</Text></View>;
+  const end = (notify = true) => {
+    if (notify && started && BOOKING_ID.test(bookingId) && !user?.demo && !booking?.demo) {
+      sendCallSignal({ bookingId, signalType: "hangup", payload: {} }).catch(() => {});
+    } else if (notify) {
+      demoChannel.current?.postMessage({ type: "hangup" });
+    }
+    stopMedia();
+    setConnected(false);
+    setMediaReady(false);
+    setStatus("Call ended");
+    setStarted(false);
+  };
+
+  const toggleMic = () => {
+    const next = !muted;
+    stream.current?.getAudioTracks?.().forEach((track) => { track.enabled = !next; });
+    setMuted(next);
+  };
+  const toggleCamera = () => {
+    const next = !camera;
+    stream.current?.getVideoTracks?.().forEach((track) => { track.enabled = next; });
+    setCamera(next);
+  };
+  const VideoView = ({ videoRef, muted: isMuted, remote }) => Platform.OS === "web"
+    ? React.createElement("video", { ref: videoRef, autoPlay: true, playsInline: true, muted: isMuted, style: remote ? styles.remoteVideo : styles.localVideo })
+    : <View style={styles.nativeVideo}><Video size={34} color={colors.muted2} /><Text style={styles.nativeVideoText}>Open the website to place this call</Text></View>;
 
   return <View style={[styles.root, { paddingTop: Math.max(insets.top, 12) + 8, paddingBottom: Math.max(insets.bottom, 16) }]}>
     <View style={styles.header}>
-      <Pressable accessibilityLabel="Back to booking" onPress={() => navigation.goBack()} hitSlop={12} style={styles.backBtn}><ArrowLeft size={20} color={colors.white} /></Pressable>
+      <Pressable accessibilityLabel="Back to booking" onPress={() => { end(started); navigation.goBack(); }} hitSlop={12} style={styles.backBtn}><ArrowLeft size={20} color={colors.white} /></Pressable>
       <View style={{ flex: 1 }}>
         <Text style={styles.eyebrow}>PRIVATE BOOKING CALL</Text>
         <Text style={styles.title}>{contactName}</Text>
-        <Text style={styles.subtitle}>{booking?.pooja_name || "Conversation"}</Text>
+        <Text style={styles.subtitle}>{booking?.pooja_name || params.poojaName || "Conversation"}</Text>
       </View>
     </View>
     <View style={styles.privacyBanner}>
@@ -152,10 +329,10 @@ export default function CallRoom({ route }) {
         <Text style={styles.privacyShieldText}>Masked</Text>
       </View>
     </View>
-    <View style={styles.stage}><VideoView videoRef={remoteVideo} remote /><VideoView videoRef={localVideo} muted />{started && !mediaReady ? <View style={styles.previewEmpty}><Video size={26} color={colors.muted2} /><Text style={styles.previewTitle}>Waiting for camera preview</Text><Text style={styles.previewText}>Allow camera and microphone access to show your video.</Text></View> : null}<View style={styles.status}><ShieldCheck size={14} color={colors.success} /><Text style={styles.statusText}>{connected ? "Connected securely" : status}</Text></View></View>
+    <View style={styles.stage}><VideoView videoRef={remoteVideo} remote /><VideoView videoRef={localVideo} muted />{started && !mediaReady ? <View style={styles.previewEmpty}><Video size={26} color={colors.muted2} /><Text style={styles.previewTitle}>Waiting for camera preview</Text><Text style={styles.previewText}>Allow microphone and camera access. Voice still works if the camera is blocked.</Text></View> : null}<View style={styles.status}><ShieldCheck size={14} color={colors.success} /><Text style={styles.statusText}>{connected ? "Connected" : status}</Text></View></View>
     <View style={styles.controls}><Control icon={muted ? MicOff : Mic} label={muted ? "Unmute" : "Mute"} onPress={toggleMic} /><Control icon={camera ? Video : VideoOff} label={camera ? "Camera" : "Video"} onPress={toggleCamera} /><Pressable accessibilityLabel="End call" onPress={() => { end(); navigation.goBack(); }} style={styles.end}><PhoneOff size={20} color={colors.white} /></Pressable></View>
     {!started ? <Button title="Start video call" icon={Phone} onPress={connect} style={styles.start} /> : null}
-    <Text style={styles.note}>Calls are available only to the customer and assigned purohit for this confirmed booking.</Text>
+    <Text style={styles.note}>Both people open this call from the booking. The browser will ask for the microphone, and the camera if you want video.</Text>
   </View>;
 }
 

@@ -126,6 +126,8 @@ if (areas.length !== 100) throw new Error(`Expected 100 Bangalore areas, receive
 fs.mkdirSync(output, { recursive: true });
 const sourceImage = path.join(root, "assets/images/hero-purohit.webp");
 if (fs.existsSync(sourceImage)) fs.copyFileSync(sourceImage, path.join(output, "seo-purohit.webp"));
+const favicon = path.join(root, "assets/favicon.png");
+if (fs.existsSync(favicon)) fs.copyFileSync(favicon, path.join(output, "favicon.png"));
 for (const area of areas) {
   const directory = path.join(output, route, area.slug);
   fs.mkdirSync(directory, { recursive: true });

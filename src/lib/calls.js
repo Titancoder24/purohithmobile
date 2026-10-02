@@ -47,9 +47,16 @@ export function startInAppCall(navigation, { bookingId, booking } = {}) {
     console.warn("Navigation object required to start in-app call");
     return;
   }
+  const id = bookingId || booking?.id;
+  if (!id) {
+    Alert.alert("Call unavailable", "Calls open once this ceremony has a booking.");
+    return;
+  }
   navigation.navigate("CallRoom", {
-    bookingId: bookingId || booking?.id,
-    booking,
+    bookingId: id,
+    priestName: booking?.priest_name,
+    customerName: booking?.customer_name,
+    poojaName: booking?.pooja_name,
   });
 }
 
