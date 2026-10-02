@@ -131,7 +131,7 @@ export default function RequestProposals({ route, navigation }) {
 
   const currentInvoiceNo = payment?.booking?.invoice_no || requestData?.invoice_number || params.request?.invoice_number || null;
   const currentInvoiceHtml = payment?.booking?.invoice_html || null;
-  const currentBookingId = payment?.booking?.id || requestData?.booking_id || params.request?.booking_id || request.id;
+  const currentBookingId = payment?.booking?.id || requestData?.booking_id || params.request?.booking_id || null;
 
   const currentBookingObject = useMemo(() => {
     return payment?.booking || {
@@ -262,7 +262,18 @@ export default function RequestProposals({ route, navigation }) {
             {/* Communication Action Row */}
             <View style={styles.contactActionsRow}>
               <Pressable
-                onPress={() => navigation.navigate("Conversation", { bookingId: currentBookingId, booking: currentBookingObject })}
+                onPress={() => {
+                  if (!currentBookingId) {
+                    Alert.alert("Chat unavailable", "Messages open once this ceremony has a booking.");
+                    return;
+                  }
+                  navigation.navigate("Conversation", {
+                    bookingId: currentBookingId,
+                    priestName: activeConfirmedBid?.priest_name || currentBookingObject?.priest_name,
+                    customerName: user?.name,
+                    poojaName: request.pooja_name,
+                  });
+                }}
                 style={styles.messageContactBtn}
               >
                 <MessageSquareText size={16} color={colors.white} />

@@ -288,17 +288,17 @@ export default function MyBookings({ navigation }) {
                   <Text style={{ color: colors.info, fontSize: font.sizes.xs }}>Refunded ₹{(b.refund_amount || 0).toLocaleString("en-IN")}</Text>
                 )}
               </View>
-              {b.status === "confirmed" ? <View style={styles.primaryActions}>
-                <Pressable testID={`track-btn-${b.id}`} onPress={() => navigation.navigate("TrackPriest", { booking: b })} style={styles.trackAction}><LocateFixed size={17} color={colors.white} /><Text style={styles.trackActionText}>Track purohit</Text><ChevronRight size={16} color={colors.white} /></Pressable>
-                <Pressable testID={`message-btn-${b.id}`} accessibilityLabel="Message purohit" onPress={() => navigation.navigate("Conversation", { bookingId: b.id })} style={styles.roundAction}><MessageSquareText size={17} color={colors.ink} /></Pressable>
-                <Pressable
+              {b.status === "confirmed" || b.payment_status === "paid" ? <View style={styles.primaryActions}>
+                {b.status === "confirmed" ? <Pressable testID={`track-btn-${b.id}`} onPress={() => navigation.navigate("TrackPriest", { booking: b })} style={styles.trackAction}><LocateFixed size={17} color={colors.white} /><Text style={styles.trackActionText}>Track purohit</Text><ChevronRight size={16} color={colors.white} /></Pressable> : null}
+                <Pressable testID={`message-btn-${b.id}`} accessibilityLabel="Message purohit" onPress={() => navigation.navigate("Conversation", { bookingId: b.id, priestName: b.priest_name, customerName: b.customer_name, poojaName: b.pooja_name })} style={styles.roundAction}><MessageSquareText size={17} color={colors.ink} /></Pressable>
+                {b.status === "confirmed" ? <Pressable
                   testID={`call-btn-${b.id}`}
                   accessibilityLabel="In-app call purohit"
                   onPress={() => startInAppCall(navigation, { bookingId: b.id, booking: b })}
                   style={styles.roundAction}
                 >
                   <Phone size={17} color={colors.ink} />
-                </Pressable>
+                </Pressable> : null}
               </View> : null}
               <View style={styles.actions}>
                 {b.status === "completed" && <ActionBtn label={t.reviewCta} testID={`review-btn-${b.id}`} onPress={() => setReviewTarget(b)} />}

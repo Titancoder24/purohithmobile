@@ -213,7 +213,7 @@ function BookingThread({ item, isCustomer, navigation }) {
 
   return (
     <Pressable
-      onPress={() => navigation.navigate("Conversation", { bookingId: item.id, booking: item })}
+      onPress={() => navigation.navigate("Conversation", { bookingId: item.id, priestName: item.priest_name, customerName: item.customer_name, poojaName: item.pooja_name })}
       style={({ pressed }) => [styles.thread, pressed && styles.threadPressed]}
     >
       <View style={styles.avatar}>
@@ -239,7 +239,7 @@ function BookingThread({ item, isCustomer, navigation }) {
       <View style={styles.actions}>
         <Pressable
           accessibilityLabel="Open messages"
-          onPress={() => navigation.navigate("Conversation", { bookingId: item.id, booking: item })}
+          onPress={() => navigation.navigate("Conversation", { bookingId: item.id, priestName: item.priest_name, customerName: item.customer_name, poojaName: item.pooja_name })}
           style={styles.messageAction}
         >
           <MessageSquareText size={16} color={colors.white} />
