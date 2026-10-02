@@ -24,6 +24,18 @@ export async function sendCallSignal({ bookingId, signalType, payload }) {
   return userId;
 }
 
+export function selectCallSignals(rows, startedAtMs) {
+  const parsed = (rows || [])
+    .filter((row) => row?.id && row.created_at)
+    .map((row) => ({ ...row, at: Date.parse(row.created_at) }))
+    .filter((row) => Number.isFinite(row.at))
+    .sort((a, b) => a.at - b.at);
+  const cutoff = parsed.reduce((latest, row) => (
+    row.signal_type === "hangup" && row.at < startedAtMs ? Math.max(latest, row.at) : latest
+  ), startedAtMs - 2 * 60 * 1000);
+  return parsed.filter((row) => row.at > cutoff && (row.signal_type !== "hangup" || row.at >= startedAtMs));
+}
+
 export async function listRecentCallSignals(bookingId) {
   if (!supabase) return [];
   const since = new Date(Date.now() - 2 * 60 * 1000).toISOString();
