@@ -10,7 +10,6 @@ import { useAuth } from "../lib/auth";
 import { listBookings } from "../lib/payments";
 import { currentCallerId, listRecentCallSignals, selectCallSignals, sendCallSignal, subscribeCallSignals } from "../lib/callSignaling";
 import { logBookingCall } from "../lib/bookingChat";
-import { notifyCallPush } from "../lib/notifications";
 import { createMediaStream, createPeerConnection, getCallMedia, isCallSupported, startCallAudio, stopCallAudio, unsupportedReason } from "../lib/webrtc";
 import CallVideo from "../components/CallVideo";
 
@@ -171,7 +170,6 @@ export default function CallRoom({ route }) {
     const outcome = connectedAt.current ? "completed" : declined.current ? "declined" : "missed";
     const durationSeconds = connectedAt.current ? (Date.now() - connectedAt.current) / 1000 : 0;
     logBookingCall({ bookingId, senderRole: user?.role, senderName: user?.name, outcome, durationSeconds }).catch(() => {});
-    if (outcome === "missed") notifyCallPush(bookingId, "missed").catch(() => {});
   };
   const writeCallLogRef = useRef(writeCallLog);
   writeCallLogRef.current = writeCallLog;
@@ -485,7 +483,6 @@ export default function CallRoom({ route }) {
         setStatus(isCustomer ? "Waiting for the purohit to join..." : "Waiting for the customer to join...");
       }
       if (isCaller.current) {
-        notifyCallPush(bookingId, "ring").catch(() => {});
         clearTimeout(noAnswer.current);
         noAnswer.current = setTimeout(() => {
           if (!alive() || connectedAt.current) return;

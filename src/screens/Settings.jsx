@@ -54,8 +54,8 @@ function NotificationSettings() {
     setBusy(true);
     try {
       if (next) {
-        const token = await registerForPush();
-        if (Platform.OS !== "web" && !token) throw new Error("Notification permission was not granted");
+        const { status } = await registerForPush();
+        if (Platform.OS !== "web" && status !== "registered") throw new Error("Notification permission was not granted");
       } else {
         await unregisterPush();
       }
@@ -67,8 +67,7 @@ function NotificationSettings() {
     <View style={styles.summary}><View style={styles.summaryIcon}><Bell size={23} color={colors.white} /></View><View style={{ flex: 1 }}><Text style={styles.summaryLabel}>BOOKING UPDATES</Text><Text style={styles.summaryTitle}>{notificationsEnabled ? "Notifications are on" : "Notifications are off"}</Text><Text style={styles.summaryBody}>Proposal, payment, chat, and priest-arrival updates.</Text></View>{busy ? <ActivityIndicator color={colors.brandOrange} /> : <Switch value={notificationsEnabled} onValueChange={update} trackColor={{ false: "#D6D4D0", true: "#E6A177" }} thumbColor={notificationsEnabled ? colors.brandOrangeDark : "#FFFFFF"} />}</View>
     <Text style={styles.sectionTitle}>What you will receive</Text>
     <InfoRow icon={ShieldCheck} title="Booking status" body="Confirmation, payment verification, and ceremony updates." />
-    <InfoRow icon={Bell} title="New activity" body="Proposals, messages, and schedule reminders." />
-  </>;
+    <InfoRow icon={Bell} title="New activity" body="Proposals, messages, and schedule reminders." />  </>;
 }
 
 function DeviceSettings() {

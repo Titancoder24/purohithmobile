@@ -9,7 +9,6 @@ import { Button, Field } from "../components/UI";
 import { PrimaryButton } from "../components/ProductUI";
 import { tokens } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { registerForPush } from "../lib/notifications";
 import BrandLogo from "../components/BrandLogo";
 import { authRedirectUrl, isSupabaseConfigured, supabase } from "../lib/supabase";
 
@@ -129,8 +128,6 @@ export default function Login() {
       const nextUser = await applySupabaseSession(data.session, role);
       if (!nextUser) throw new Error("Your session could not be opened. Request a new code and try again.");
       setNotice("Email verified. Opening your account...");
-      // Best-effort push registration; won't block login.
-      registerForPush().catch(() => {});
     } catch (e) {
       setNotice("");
       const message = e?.message || "Invalid verification code";

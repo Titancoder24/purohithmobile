@@ -49,20 +49,80 @@ export async function listRecentCallSignals(bookingId) {
   return data || [];
 }
 
-export function subscribeIncomingCalls(userId, onSignal) {
+/**
+ * Calls that are still ringing for this user: the other participant's latest "ready" within
+ * the ring window, with no hangup and no "ready" from this user after it.
+ */
+export async function findRingingCalls(userId, ringWindowMs = 45000) {
+  if (!supabase || !userId) return [];
+  const since = new Date(Date.now() - ringWindowMs).toISOString();
+  const { data, error } = await supabase
+    .from("booking_call_signals")
+    .select("id,booking_id,sender_id,signal_type,created_at")
+    .in("signal_type", ["ready", "hangup"])
+    .gte("created_at", since)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  const latest = new Map();
+  (data || []).forEach((row) => {
+    if (row.signal_type === "ready" && row.sender_id !== userId) latest.set(row.booking_id, row);
+    else latest.delete(row.booking_id);
+  });
+  return [...latest.values()];
+}
+
+export function subscribeIncomingCalls(userId, onSignal, { onSubscribed } = {}) {
   if (!supabase || !userId) return { unsubscribe: () => {} };
-  const channel = supabase
-    .channel(`incoming-calls:${userId}`)
-    .on("postgres_changes", {
-      event: "INSERT",
-      schema: "public",
-      table: "booking_call_signals",
-    }, (payload) => {
-      const row = payload?.new;
-      if (row && row.sender_id !== userId && (row.signal_type === "ready" || row.signal_type === "hangup")) onSignal(row);
-    })
-    .subscribe();
-  return { unsubscribe: () => { supabase.removeChannel(channel); } };
+  let channel = null;
+  let stopped = false;
+  let retry = null;
+  let attempt = 0;
+
+  const connect = () => {
+    if (stopped) return;
+    const current = supabase
+      .channel(`incoming-calls:${userId}:${Date.now()}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "booking_call_signals",
+      }, (payload) => {
+        const row = payload?.new;
+        if (row && row.sender_id !== userId && (row.signal_type === "ready" || row.signal_type === "hangup")) onSignal(row);
+      });
+    channel = current;
+    current.subscribe((status) => {
+      if (stopped || channel !== current) return;
+      if (status === "SUBSCRIBED") {
+        attempt = 0;
+        onSubscribed?.();
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        channel = null;
+        supabase.removeChannel(current);
+        clearTimeout(retry);
+        retry = setTimeout(connect, Math.min(30000, 1000 * 2 ** attempt++));
+      }
+    });
+  };
+
+  connect();
+  return {
+    resync: () => {
+      if (stopped) return;
+      if (!channel) {
+        clearTimeout(retry);
+        connect();
+      } else {
+        onSubscribed?.();
+      }
+    },
+    unsubscribe: () => {
+      stopped = true;
+      clearTimeout(retry);
+      if (channel) supabase.removeChannel(channel);
+      channel = null;
+    },
+  };
 }
 
 export function subscribeCallSignals(bookingId, onSignal) {

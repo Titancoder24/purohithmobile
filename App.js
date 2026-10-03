@@ -9,7 +9,6 @@ import { House, CalendarDays, MessagesSquare, CircleUserRound, ChartNoAxesCombin
 import * as Linking2 from "expo-linking";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/lib/auth";
-import { registerForPush } from "./src/lib/notifications";
 import { colors, font } from "./src/lib/theme";
 import { useI18n } from "./src/lib/i18n";
 import { isWeb, webMaxWidth } from "./src/lib/webLayout";
@@ -202,11 +201,6 @@ function Router() {
   const { tokens } = useAppearance();
   const navTheme = useMemo(() => navigationTheme(tokens.accent), [tokens.accent]);
   const routeNameRef = useRef();
-
-  // Register for push notifications once we have an authenticated user.
-  useEffect(() => {
-      if (user) registerForPush().catch((e) => console.warn("push init failed", e?.message));
-  }, [user]);
 
   useEffect(() => {
     startMobileSession().catch((e) => console.warn("analytics session failed", e?.message));
