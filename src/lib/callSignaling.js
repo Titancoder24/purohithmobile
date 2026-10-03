@@ -50,6 +50,17 @@ export async function listRecentCallSignals(bookingId) {
 }
 
 /**
+ * Realtime only delivers RLS-protected rows to channels joined with the user's JWT; a channel
+ * joined before the session reaches the socket is treated as anon and receives nothing.
+ */
+async function authorizeRealtime() {
+  const { data } = await supabase.auth.getSession();
+  if (!data?.session?.access_token) return false;
+  await supabase.realtime.setAuth();
+  return true;
+}
+
+/**
  * Calls that are still ringing for this user: the other participant's latest "ready" within
  * the ring window, with no hangup and no "ready" from this user after it.
  */
@@ -58,7 +69,7 @@ export async function findRingingCalls(userId, ringWindowMs = 45000) {
   const since = new Date(Date.now() - ringWindowMs).toISOString();
   const { data, error } = await supabase
     .from("booking_call_signals")
-    .select("id,booking_id,sender_id,signal_type,created_at")
+    .select("id,booking_id,sender_id,signal_type,payload,created_at")
     .in("signal_type", ["ready", "hangup"])
     .gte("created_at", since)
     .order("created_at", { ascending: true });
@@ -78,8 +89,23 @@ export function subscribeIncomingCalls(userId, onSignal, { onSubscribed } = {}) 
   let retry = null;
   let attempt = 0;
 
-  const connect = () => {
+  const scheduleRetry = () => {
+    clearTimeout(retry);
+    retry = setTimeout(connect, Math.min(30000, 1000 * 2 ** attempt++));
+  };
+
+  let connecting = false;
+  const connect = async () => {
+    if (stopped || connecting || channel) return;
+    connecting = true;
+    const authorized = await authorizeRealtime().catch(() => false);
+    connecting = false;
     if (stopped) return;
+    if (!authorized) {
+      scheduleRetry();
+      return;
+    }
+    if (channel) return;
     const current = supabase
       .channel(`incoming-calls:${userId}:${Date.now()}`)
       .on("postgres_changes", {
@@ -99,8 +125,7 @@ export function subscribeIncomingCalls(userId, onSignal, { onSubscribed } = {}) 
       } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
         channel = null;
         supabase.removeChannel(current);
-        clearTimeout(retry);
-        retry = setTimeout(connect, Math.min(30000, 1000 * 2 ** attempt++));
+        scheduleRetry();
       }
     });
   };
@@ -113,7 +138,7 @@ export function subscribeIncomingCalls(userId, onSignal, { onSubscribed } = {}) 
         clearTimeout(retry);
         connect();
       } else {
-        onSubscribed?.();
+        authorizeRealtime().catch(() => {}).finally(() => { if (!stopped) onSubscribed?.(); });
       }
     },
     unsubscribe: () => {
@@ -128,9 +153,10 @@ export function subscribeIncomingCalls(userId, onSignal, { onSubscribed } = {}) 
 export function subscribeCallSignals(bookingId, onSignal) {
   if (!supabase) return { unsubscribe: () => {}, ready: Promise.resolve() };
   const channel = supabase.channel(`booking-call:${bookingId}`);
+  let removed = false;
   const ready = new Promise((resolve, reject) => {
     let settled = false;
-    channel
+    authorizeRealtime().catch(() => false).then(() => !removed && channel
       .on("postgres_changes", {
         event: "INSERT",
         schema: "public",
@@ -148,10 +174,13 @@ export function subscribeCallSignals(bookingId, onSignal) {
           settled = true;
           reject(new Error("The call could not connect. Check your connection and try again."));
         }
-      });
+      }));
   });
   return {
     ready,
-    unsubscribe: () => { supabase.removeChannel(channel); },
+    unsubscribe: () => {
+      removed = true;
+      supabase.removeChannel(channel);
+    },
   };
 }

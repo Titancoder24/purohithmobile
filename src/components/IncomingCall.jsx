@@ -33,7 +33,11 @@ function startNativeRingtone() {
   return () => {
     stopped = true;
     Vibration.cancel();
-    if (sound) sound.stopAsync().then(() => sound.unloadAsync()).catch(() => {});
+    const release = sound ? sound.stopAsync().then(() => sound.unloadAsync()) : Promise.resolve();
+    // The ringtone's playback-only session would otherwise block the microphone on iOS.
+    release
+      .then(() => Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true, staysActiveInBackground: false }))
+      .catch(() => {});
   };
 }
 
@@ -99,7 +103,7 @@ export default function IncomingCall({ navigationRef }) {
     return bookings.current.get(bookingId) || null;
   }, []);
 
-  ringRef.current = async (bookingId, startedAt) => {
+  ringRef.current = async (bookingId, startedAt, media) => {
     if (!bookingId || callRef.current) return;
     const route = navigationRef?.getCurrentRoute?.();
     if (route?.name === "CallRoom" && route.params?.bookingId === bookingId) return;
@@ -110,7 +114,7 @@ export default function IncomingCall({ navigationRef }) {
     if (callRef.current !== placeholder) return;
     const name = (user?.role === "priest" ? booking?.customer_name : booking?.priest_name) || otherLabel;
     const pooja = booking?.pooja_name || "Booking call";
-    const next = { bookingId, name, pooja, booking };
+    const next = { bookingId, name, pooja, booking, media: media === "voice" ? "voice" : "video" };
     callRef.current = next;
     setCall(next);
 
@@ -130,7 +134,7 @@ export default function IncomingCall({ navigationRef }) {
       findRingingCalls(user.id)
         .then((rows) => {
           const latest = rows[rows.length - 1];
-          if (latest) ringRef.current(latest.booking_id, latest.created_at).catch(() => {});
+          if (latest) ringRef.current(latest.booking_id, latest.created_at, latest.payload?.media).catch(() => {});
         })
         .catch(() => {});
     };
@@ -139,7 +143,7 @@ export default function IncomingCall({ navigationRef }) {
         if (callRef.current?.bookingId === row.booking_id) clear();
         return;
       }
-      ringRef.current(row.booking_id, row.created_at).catch(() => {});
+      ringRef.current(row.booking_id, row.created_at, row.payload?.media).catch(() => {});
     };
     const subscription = subscribeIncomingCalls(user.id, onSignal, { onSubscribed: catchUp });
 
@@ -161,13 +165,14 @@ export default function IncomingCall({ navigationRef }) {
   if (!call) return null;
 
   const accept = () => {
-    const { bookingId, booking } = call;
+    const { bookingId, booking, media } = call;
     clear();
     navigationRef?.navigate?.("CallRoom", {
       bookingId,
       priestName: booking?.priest_name,
       customerName: booking?.customer_name,
       poojaName: booking?.pooja_name,
+      media,
       autoStart: true,
     });
   };
@@ -180,7 +185,7 @@ export default function IncomingCall({ navigationRef }) {
 
   return <View style={styles.overlay}>
     <View style={styles.card}>
-      <Text style={styles.eyebrow}>INCOMING VIDEO CALL</Text>
+      <Text style={styles.eyebrow}>{call.media === "voice" ? "INCOMING VOICE CALL" : "INCOMING VIDEO CALL"}</Text>
       <View style={styles.avatar}><Text style={styles.avatarText}>{call.name.slice(0, 1).toUpperCase()}</Text></View>
       <Text style={styles.name}>{call.name}</Text>
       <Text style={styles.pooja}>{call.pooja}</Text>

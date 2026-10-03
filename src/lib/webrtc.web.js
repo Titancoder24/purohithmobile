@@ -19,4 +19,6 @@ export async function getCallMedia(constraints) {
 
 export function startCallAudio() {}
 
+export function setCallSpeaker() {}
+
 export function stopCallAudio() {}

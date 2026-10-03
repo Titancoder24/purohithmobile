@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { bindBrandStyles } from "../lib/brandStyles";
 import { Platform, Pressable, Text, View } from "react-native";
-import { Mic, MicOff, Phone, PhoneOff, ShieldCheck, Video, VideoOff, ArrowLeft, Lock } from "lucide-react-native";
+import { Mic, MicOff, Phone, PhoneOff, ShieldCheck, Video, VideoOff, Volume2, VolumeX, ArrowLeft, Lock } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { colors, spacing } from "../lib/theme";
@@ -10,7 +10,7 @@ import { useAuth } from "../lib/auth";
 import { listBookings } from "../lib/payments";
 import { currentCallerId, listRecentCallSignals, selectCallSignals, sendCallSignal, subscribeCallSignals } from "../lib/callSignaling";
 import { logBookingCall } from "../lib/bookingChat";
-import { createMediaStream, createPeerConnection, getCallMedia, isCallSupported, startCallAudio, stopCallAudio, unsupportedReason } from "../lib/webrtc";
+import { createMediaStream, createPeerConnection, getCallMedia, isCallSupported, setCallSpeaker, startCallAudio, stopCallAudio, unsupportedReason } from "../lib/webrtc";
 import CallVideo from "../components/CallVideo";
 
 const ICE_SERVERS = [
@@ -47,7 +47,15 @@ function routeBooking(value) {
   return value && typeof value === "object" ? value : null;
 }
 
-async function captureCallMedia() {
+async function captureCallMedia(wantsVideo) {
+  if (!wantsVideo) {
+    try {
+      return await getCallMedia({ audio: true, video: false });
+    } catch (error) {
+      if (error?.name === "NotAllowedError") throw new Error("Allow the microphone to place the call.");
+      throw new Error(error?.message || "Microphone access failed. Check the permission and try again.");
+    }
+  }
   try {
     return await getCallMedia({ audio: true, video: true });
   } catch (error) {
@@ -74,6 +82,9 @@ export default function CallRoom({ route }) {
     customer_name: params.customerName || "Customer",
     pooja_name: params.poojaName || "Ceremony",
   }));
+  const [callType, setCallType] = useState(params.media === "voice" ? "voice" : "video");
+  const callTypeRef = useRef(callType);
+  const [speaker, setSpeaker] = useState(false);
   const [status, setStatus] = useState("Ready to call");
   const [muted, setMuted] = useState(false);
   const [camera, setCamera] = useState(true);
@@ -121,10 +132,12 @@ export default function CallRoom({ route }) {
   const playRemote = (node = remoteVideo.current) => {
     const media = remoteStream.current;
     if (!node || !media) return;
-    node.srcObject = media;
+    // Reassigning srcObject restarts loading and aborts a pending play(), so only attach once.
+    if (node.srcObject !== media) node.srcObject = media;
     node.muted = false;
     node.volume = 1;
-    node.play?.().then(() => setSoundLocked(false)).catch(() => {
+    node.play?.().then(() => setSoundLocked(false)).catch((error) => {
+      if (error?.name !== "NotAllowedError") return;
       node.muted = true;
       node.play?.().catch?.(() => {});
       setSoundLocked(true);
@@ -248,7 +261,7 @@ export default function CallRoom({ route }) {
   const setupPeer = async (sendIce) => {
     const token = generation.current;
     if (!stream.current) {
-      const captured = await captureCallMedia();
+      const captured = await captureCallMedia(callTypeRef.current === "video");
       if (generation.current !== token || !activeRef.current) {
         captured.getTracks().forEach((track) => track.stop());
         return null;
@@ -258,7 +271,9 @@ export default function CallRoom({ route }) {
       setMediaReady(true);
       setCamera(captured.getVideoTracks().some((track) => track.readyState === "live"));
       attachLocal();
-      startCallAudio();
+      const voice = callTypeRef.current === "voice";
+      startCallAudio({ video: !voice });
+      setSpeaker(!voice);
     }
     if (generation.current !== token || !activeRef.current) return null;
     peer.current?.close?.();
@@ -268,6 +283,10 @@ export default function CallRoom({ route }) {
     const connection = createPeerConnection({ iceServers: ICE_SERVERS });
     peer.current = connection;
     stream.current.getTracks().forEach((track) => connection.addTrack(track, stream.current));
+    // Keeps a video slot in the offer so the other side's camera still reaches us without ours.
+    if (isCustomer && !stream.current.getVideoTracks().length) {
+      try { connection.addTransceiver?.("video", { direction: "recvonly" }); } catch (_) {}
+    }
     connection.addEventListener("track", rememberRemoteTrack);
     connection.addEventListener("icecandidate", (event) => {
       if (event.candidate) sendIce(event.candidate.toJSON ? event.candidate.toJSON() : event.candidate);
@@ -390,8 +409,10 @@ export default function CallRoom({ route }) {
     ? (booking?.priest_name || params.priestName || "Purohit")
     : (booking?.customer_name || params.customerName || "Customer");
 
-  const connect = async () => {
+  const connect = async (type = callTypeRef.current) => {
     if (activeRef.current) return;
+    callTypeRef.current = type === "voice" ? "voice" : "video";
+    setCallType(callTypeRef.current);
     if (!bookingId) {
       setStatus("Open this call from the booking.");
       return;
@@ -440,7 +461,7 @@ export default function CallRoom({ route }) {
         setStarted(false);
         return;
       }
-      setStatus("Requesting microphone and camera access...");
+      setStatus(callTypeRef.current === "voice" ? "Requesting microphone access..." : "Requesting microphone and camera access...");
       myId.current = await currentCallerId();
       if (!alive()) return;
       const connection = await setupPeer((candidate) => {
@@ -470,14 +491,14 @@ export default function CallRoom({ route }) {
         stopMedia();
         setMediaReady(false);
         setStarted(false);
-        setStatus(`${contactName}'s call has ended. Press Start video call to call back.`);
+        setStatus(`${contactName}'s call has ended. Choose voice or video call to call back.`);
         return;
       }
       isCaller.current = !params.autoStart && !otherWaiting;
       callLogged.current = !isCaller.current;
       for (const row of recent) await enqueue(row);
       if (!alive()) return;
-      await sendCallSignal({ bookingId, signalType: "ready", payload: { role: user?.role || "customer" } });
+      await sendCallSignal({ bookingId, signalType: "ready", payload: { role: user?.role || "customer", media: callTypeRef.current } });
       if (!alive()) return;
       if (!offerSent.current) {
         setStatus(isCustomer ? "Waiting for the purohit to join..." : "Waiting for the customer to join...");
@@ -546,6 +567,12 @@ export default function CallRoom({ route }) {
     stream.current?.getVideoTracks?.().forEach((track) => { track.enabled = next; });
     setCamera(next);
   };
+  const toggleSpeaker = () => {
+    const next = !speaker;
+    setCallSpeaker(next);
+    setSpeaker(next);
+  };
+  const voice = callType === "voice";
   return <View style={[styles.root, { paddingTop: Math.max(insets.top, 12) + 8, paddingBottom: Math.max(insets.bottom, 16) }]}>
     <View style={styles.header}>
       <Pressable accessibilityLabel="Back to booking" onPress={() => { end(started); navigation.goBack(); }} hitSlop={12} style={styles.backBtn}><ArrowLeft size={20} color={colors.white} /></Pressable>
@@ -569,16 +596,30 @@ export default function CallRoom({ route }) {
       </View>
     </View>
     <View style={styles.stage}>
-      <CallVideo videoRef={remoteVideo} stream={remoteMedia} style={Platform.OS === "web" ? styles.remoteVideo : styles.remoteVideoNative} />
-      <CallVideo videoRef={localVideo} stream={localMedia} muted mirror zOrder={1} style={Platform.OS === "web" ? styles.localVideo : styles.localVideoNative} />
-      {started && !mediaReady ? <View style={styles.previewEmpty}><Video size={26} color={colors.muted2} /><Text style={styles.previewTitle}>Waiting for camera preview</Text><Text style={styles.previewText}>Allow microphone and camera access. Voice still works if the camera is blocked.</Text></View> : null}
+      <CallVideo videoRef={remoteVideo} stream={remoteMedia} style={voice ? styles.hiddenMedia : Platform.OS === "web" ? styles.remoteVideo : styles.remoteVideoNative} />
+      {voice ? null : <CallVideo videoRef={localVideo} stream={localMedia} muted mirror zOrder={1} style={Platform.OS === "web" ? styles.localVideo : styles.localVideoNative} />}
+      {voice ? <View style={styles.voiceStage}>
+        <View style={[styles.voiceAvatar, connected && styles.voiceAvatarLive]}><Text style={styles.voiceAvatarText}>{contactName.slice(0, 1).toUpperCase()}</Text></View>
+        <Text style={styles.voiceName}>{contactName}</Text>
+        <Text style={styles.voiceKind}>{started ? "Voice call" : "Choose voice or video call"}</Text>
+      </View> : null}
+      {!voice && started && !mediaReady ? <View style={styles.previewEmpty}><Video size={26} color={colors.muted2} /><Text style={styles.previewTitle}>Waiting for camera preview</Text><Text style={styles.previewText}>Allow microphone and camera access. Voice still works if the camera is blocked.</Text></View> : null}
       {soundLocked ? <Pressable accessibilityLabel="Turn call sound on" onPress={enableSound} style={styles.hear}><Text style={styles.hearText}>Tap to hear</Text></Pressable> : null}
       <View style={styles.status}><ShieldCheck size={14} color={colors.success} /><Text style={styles.statusText}>{connected ? "Connected" : status}</Text></View>
     </View>
-    <View style={styles.controls}><Control icon={muted ? MicOff : Mic} label={muted ? "Unmute" : "Mute"} onPress={toggleMic} /><Control icon={camera ? Video : VideoOff} label={camera ? "Camera" : "Video"} onPress={toggleCamera} /><Pressable accessibilityLabel="End call" onPress={() => { end(); navigation.goBack(); }} style={styles.end}><PhoneOff size={20} color={colors.white} /></Pressable></View>
-    {!started ? <Button title="Start video call" icon={Phone} onPress={connect} style={styles.start} /> : null}
+    <View style={styles.controls}>
+      <Control icon={muted ? MicOff : Mic} label={muted ? "Unmute" : "Mute"} onPress={toggleMic} />
+      {voice
+        ? (Platform.OS === "web" ? null : <Control icon={speaker ? Volume2 : VolumeX} label={speaker ? "Speaker on" : "Speaker"} onPress={toggleSpeaker} />)
+        : <Control icon={camera ? Video : VideoOff} label={camera ? "Camera" : "Video"} onPress={toggleCamera} />}
+      <Pressable accessibilityLabel="End call" onPress={() => { end(); navigation.goBack(); }} style={styles.end}><PhoneOff size={20} color={colors.white} /></Pressable>
+    </View>
+    {!started ? <View style={styles.startRow}>
+      <Button title="Voice call" icon={Phone} onPress={() => connect("voice")} style={[styles.start, styles.startHalf, styles.startVoice]} />
+      <Button title="Video call" icon={Video} onPress={() => connect("video")} style={[styles.start, styles.startHalf]} />
+    </View> : null}
     {failed ? <Button title="Try the call again" icon={Phone} onPress={retry} style={styles.start} /> : null}
-    <Text style={styles.note}>{Platform.OS === "web" ? "The browser will ask for the microphone, and the camera if you want video." : "The app will ask for the microphone, and the camera if you want video."}</Text>
+    <Text style={styles.note}>{voice ? `The ${Platform.OS === "web" ? "browser" : "app"} will ask for the microphone.` : `The ${Platform.OS === "web" ? "browser" : "app"} will ask for the microphone and camera.`}</Text>
   </View>;
 }
 
@@ -615,5 +656,15 @@ const styles = bindBrandStyles({
   controlLabel: { color: "#C9C9C5", fontSize: 10 },
   end: { width: 56, height: 52, borderRadius: 26, backgroundColor: colors.danger, alignItems: "center", justifyContent: "center" },
   start: { marginTop: spacing.lg, backgroundColor: colors.saffron },
+  startRow: { flexDirection: "row", gap: 12 },
+  startHalf: { flex: 1 },
+  startVoice: { backgroundColor: colors.success },
+  hiddenMedia: { position: "absolute", width: 1, height: 1, opacity: 0, left: 0, top: 0 },
+  voiceStage: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, alignItems: "center", justifyContent: "center", zIndex: 2 },
+  voiceAvatar: { width: 112, height: 112, borderRadius: 56, backgroundColor: "#2A231C", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "rgba(255,255,255,.18)" },
+  voiceAvatarLive: { borderColor: colors.success },
+  voiceAvatarText: { color: colors.white, fontSize: 42, fontWeight: "700" },
+  voiceName: { color: colors.white, fontSize: 20, fontWeight: "700", marginTop: 16 },
+  voiceKind: { color: "#AFAFAF", fontSize: 12, marginTop: 4 },
   note: { color: "#8F8F8A", fontSize: 10, textAlign: "center", lineHeight: 15, marginTop: spacing.md, marginBottom: spacing.sm },
 });

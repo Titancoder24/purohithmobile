@@ -48,11 +48,17 @@ export async function getCallMedia(constraints) {
   return webrtc.mediaDevices.getUserMedia({ audio: Boolean(constraints?.audio), video });
 }
 
-export function startCallAudio() {
+export function startCallAudio({ video = true } = {}) {
   try {
-    inCall?.start({ media: "video" });
+    inCall?.start({ media: video ? "video" : "audio" });
     inCall?.setKeepScreenOn(true);
-    inCall?.setForceSpeakerphoneOn(true);
+    inCall?.setForceSpeakerphoneOn(video);
+  } catch (_) {}
+}
+
+export function setCallSpeaker(on) {
+  try {
+    inCall?.setForceSpeakerphoneOn(Boolean(on));
   } catch (_) {}
 }
 
